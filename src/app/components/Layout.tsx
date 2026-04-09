@@ -32,7 +32,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['/disposal', '/report', '/comment-tasks', '/analytics', '/settings']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['/disposal', '/report', '/comment-tasks', '/settings']);
 
   const navItems: NavItem[] = [
     { path: '/', label: '舆情展示', icon: Home },
@@ -55,15 +55,10 @@ export function Layout() {
         { path: '/comment-tasks/statistics', label: '任务统计' },
       ]
     },
-    { 
-      path: '/analytics', 
-      label: '统计分析', 
-      icon: BarChart3,
-      subItems: [
-        { path: '/analytics/sentiment', label: '舆情统计' },
-        { path: '/analytics/disposal', label: '处置统计' },
-        { path: '/analytics/comment', label: '网评统计' },
-      ]
+    {
+      path: '/analytics',
+      label: '数据看板',
+      icon: BarChart3
     },
     { 
       path: '/settings', 

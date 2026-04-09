@@ -5,13 +5,8 @@ export function CommentStatistics() {
   const tasks = mockCommentTasks;
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold mb-2">任务统计</h1>
-      </div>
-
-      <div className="space-y-6">
-        <div className="grid grid-cols-4 gap-6">
+    <div className="space-y-6">
+      <div className="grid grid-cols-4 gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">总任务数</CardTitle>
@@ -124,6 +119,5 @@ export function CommentStatistics() {
           </Card>
         </div>
       </div>
-    </div>
   );
 }

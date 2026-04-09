@@ -19,13 +19,8 @@ export function DisposalStatistics() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold mb-2">处置统计</h1>
-      </div>
-
-      <div className="space-y-6">
-        <div className="grid grid-cols-3 gap-6">
+    <div className="space-y-6">
+      <div className="grid grid-cols-3 gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">总处置任务</CardTitle>
@@ -119,7 +114,6 @@ export function DisposalStatistics() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

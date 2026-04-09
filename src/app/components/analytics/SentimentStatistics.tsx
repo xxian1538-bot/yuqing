@@ -60,51 +60,9 @@ export function SentimentStatistics() {
   ];
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold mb-2">舆情统计</h1>
-        </div>
-
-        {/* 时间筛选 */}
-        <div className="flex items-center gap-3 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
-          <Calendar className="w-5 h-5 text-gray-500" />
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-[150px] border-none shadow-none focus:ring-0">
-              <SelectValue placeholder="选择时间范围" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">今日</SelectItem>
-              <SelectItem value="yesterday">昨日</SelectItem>
-              <SelectItem value="7days">近7天</SelectItem>
-              <SelectItem value="30days">近30天</SelectItem>
-              <SelectItem value="custom">自定义时间</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {dateRange === "custom" && (
-            <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-9"
-              />
-              <span className="text-gray-400">-</span>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-9"
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        {/* 关键指标 */}
-        <div className="grid grid-cols-4 gap-6">
+    <div className="space-y-6">
+      {/* 关键指标 */}
+      <div className="grid grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">总舆情数</CardTitle>
@@ -309,6 +267,5 @@ export function SentimentStatistics() {
           </CardContent>
         </Card>
       </div>
-    </div>
   );
 }

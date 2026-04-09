@@ -14,7 +14,7 @@ import { PerformanceManagement } from './components/comment/PerformanceManagemen
 import { CommentStatistics } from './components/comment/CommentStatistics';
 
 // Analytics (统计) components
-import { SentimentStatistics } from './components/analytics/SentimentStatistics';
+import { GlobalDashboard } from './components/analytics/GlobalDashboard';
 
 // Settings (设置) components
 import { SystemConfig } from './components/settings/SystemConfig';
@@ -84,25 +84,7 @@ export const router = createBrowserRouter([
       // Analytics routes
       {
         path: "analytics",
-        Component: PassThrough,
-        children: [
-          {
-            index: true,
-            loader: () => redirect("sentiment"),
-          },
-          {
-            path: "sentiment",
-            Component: SentimentStatistics,
-          },
-          {
-            path: "disposal",
-            Component: DisposalStatistics,
-          },
-          {
-            path: "comment",
-            Component: CommentStatistics,
-          },
-        ],
+        Component: GlobalDashboard,
       },
       // Settings routes
       {
