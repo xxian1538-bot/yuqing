@@ -248,13 +248,14 @@ export function SentimentList() {
                   onCheckedChange={handleSelectAll}
                 />
               </TableHead>
-              <TableHead className="w-[300px]">标题</TableHead>
-              <TableHead>事件等级</TableHead>              <TableHead>报送状态</TableHead>
-              <TableHead>时间</TableHead>
-              <TableHead>来源平台</TableHead>
-              <TableHead className="w-[250px]">内容</TableHead>
-              <TableHead className="w-[200px]">研判建议</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="min-w-[150px] max-w-[200px]">标题</TableHead>
+              <TableHead className="min-w-[80px]">事件等级</TableHead>
+              <TableHead className="min-w-[80px]">报送状态</TableHead>
+              <TableHead className="min-w-[100px]">时间</TableHead>
+              <TableHead className="min-w-[80px]">来源平台</TableHead>
+              <TableHead className="min-w-[150px] max-w-[250px]">内容</TableHead>
+              <TableHead className="min-w-[120px] max-w-[200px]">研判建议</TableHead>
+              <TableHead className="text-right min-w-[150px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -266,15 +267,16 @@ export function SentimentList() {
                     onCheckedChange={(checked) => handleSelectOne(sentiment.id, checked as boolean)}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell className="max-w-[200px] xl:max-w-[300px] whitespace-normal">
                   <a
                     href={sentiment.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium text-blue-600 hover:underline line-clamp-2 flex items-center gap-1"
+                    className="font-medium text-blue-600 hover:underline line-clamp-2 inline-block align-middle"
+                    title={sentiment.title}
                   >
                     {sentiment.title}
-                    <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                    <ExternalLink className="w-3 h-3 inline-block ml-1" style={{ verticalAlign: 'middle', marginTop: '-2px' }} />
                   </a>
                 </TableCell>
                 <TableCell>
@@ -297,11 +299,15 @@ export function SentimentList() {
                 <TableCell>
                   <div className="text-sm">{sentiment.source}</div>
                 </TableCell>
-                <TableCell>
-                  <div className="text-sm text-gray-600 line-clamp-2">{sentiment.content}</div>
+                <TableCell className="max-w-[200px] xl:max-w-[250px] whitespace-normal">
+                  <div className="text-sm text-gray-600 line-clamp-2" title={sentiment.content}>
+                    {sentiment.content}
+                  </div>
                 </TableCell>
-                <TableCell>
-                  <div className="text-sm text-gray-600 line-clamp-2">{sentiment.analysis}</div>
+                <TableCell className="max-w-[150px] xl:max-w-[200px] whitespace-normal">
+                  <div className="text-sm text-gray-600 line-clamp-2" title={sentiment.analysis}>
+                    {sentiment.analysis}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
