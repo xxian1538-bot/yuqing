@@ -32,25 +32,25 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['/disposal', '/report', '/comment-tasks', '/settings']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['/sentiment-mgmt', '/task-mgmt', '/settings']);
 
   const navItems: NavItem[] = [
-    { path: '/', label: '舆情展示', icon: Home },
-    { 
-      path: '/disposal', 
-      label: '舆情处置', 
-      icon: ClipboardList,
+    {
+      path: '/sentiment-mgmt',
+      label: '舆情管理',
+      icon: Home,
       subItems: [
-        { path: '/disposal/tasks', label: '处置任务' },
+        { path: '/', label: '舆情展示' },
         { path: '/disposal/rules', label: '预警规则' },
       ]
     },
-    { 
-      path: '/comment-tasks', 
-      label: '网评任务', 
-      icon: MessageSquare,
+    {
+      path: '/task-mgmt',
+      label: '任务管理',
+      icon: ClipboardList,
       subItems: [
-        { path: '/comment-tasks/list', label: '任务列表' },
+        { path: '/disposal/tasks', label: '处置任务' },
+        { path: '/comment-tasks/list', label: '网评任务' },
         { path: '/comment-tasks/performance', label: '绩效管理' },
         { path: '/comment-tasks/statistics', label: '任务统计' },
       ]
@@ -60,9 +60,9 @@ export function Layout() {
       label: '数据看板',
       icon: BarChart3
     },
-    { 
-      path: '/settings', 
-      label: '系统设置', 
+    {
+      path: '/settings',
+      label: '系统设置',
       icon: Settings,
       subItems: [
         { path: '/settings/system', label: '系统配置' },
