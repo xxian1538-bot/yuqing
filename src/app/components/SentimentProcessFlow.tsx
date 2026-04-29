@@ -1,104 +1,213 @@
-import { mockSentiments, mockDisposalTasks, mockCommentTasks } from '../data/mockData';
-import { Card, CardContent } from './ui/card';
+import { mockCommentTasks, mockDisposalTasks } from '../data/mockData';
+import { useSentimentData } from '../context/SentimentDataContext';
+import { AlertCircle, Calendar, ClipboardList, MessageSquare, User } from 'lucide-react';
 import { Badge } from './ui/badge';
-import { AlertCircle, ClipboardList, MessageSquare, ArrowDown, User, Calendar } from 'lucide-react';
+import { Card, CardContent } from './ui/card';
 
 interface SentimentProcessFlowProps {
   sentimentId: string;
 }
 
 export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps) {
-  const sentiment = mockSentiments.find(s => s.id === sentimentId);
-  const disposalTasks = mockDisposalTasks.filter(t => t.sentimentId === sentimentId);
-  
-  if (!sentiment) return <div>未找到关联舆情数据</div>;
+  const { sentiments } = useSentimentData();
+  const sentiment = sentiments.find((item) => item.id === sentimentId);
+  const disposalTasks = mockDisposalTasks.filter((task) => task.sentimentId === sentimentId);
+  const commentTasks = mockCommentTasks.filter((task) => task.sentimentId === sentimentId);
+
+  if (!sentiment) {
+    return <div className="text-sm text-gray-500">未找到关联舆情数据</div>;
+  }
+
+  const branches = disposalTasks.map((disposalTask, index) => {
+    const relatedComments = mockCommentTasks.filter(
+      (commentTask) =>
+        commentTask.disposalTaskId === disposalTask.id ||
+        (commentTask.sentimentId === sentimentId && !commentTask.disposalTaskId && index === 0),
+    );
+
+    return {
+      disposalTask,
+      relatedComments,
+    };
+  });
+
+  const orphanCommentTasks =
+    disposalTasks.length === 0
+      ? commentTasks
+      : [];
 
   return (
-    <div className="p-4 bg-gray-50 rounded-lg">
-      <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-        <AlertCircle className="text-blue-600" /> 全景链路视图
+    <div className="rounded-[8px] bg-[#fafafa] p-6">
+      <h3 className="mb-6 flex items-center gap-2 text-lg font-semibold text-gray-900">
+        <AlertCircle className="h-5 w-5 text-[#1677ff]" />
+        全景链路视图
       </h3>
 
-      <div className="relative pl-8 space-y-8 before:absolute before:inset-0 before:ml-12 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-300 before:to-transparent">
-        
-        {/* Layer 1: Sentiment Event */}
-        <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-red-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10">
-            <AlertCircle className="w-5 h-5 text-white" />
-          </div>
-          <Card className="w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] hover:shadow-md transition-shadow border-l-4 border-l-red-500">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div className="font-bold text-base line-clamp-1">{sentiment.title}</div>
-                <Badge variant="destructive">{sentiment.level}</Badge>
-              </div>
-              <div className="flex gap-4 text-xs text-gray-500 mt-3">
-                <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {sentiment.publishTime}</span>
-                <span className="flex items-center gap-1"><User className="w-3 h-3"/> {sentiment.createdBy} (上报)</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Layer 2: Disposal Tasks */}
-        {disposalTasks.length === 0 ? (
-          <div className="text-center text-gray-500 py-4 relative z-10 bg-gray-50">暂无处置任务</div>
-        ) : disposalTasks.map((dTask, dIndex) => {
-          const relatedComments = mockCommentTasks.filter(c => c.disposalTaskId === dTask.id || (c.sentimentId === sentimentId && !c.disposalTaskId && dIndex === 0));
-          
-          return (
-            <div key={dTask.id} className="space-y-8">
-              <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-blue-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10">
-                  <ClipboardList className="w-5 h-5 text-white" />
-                </div>
-                <Card className="w-[calc(100%-4rem)] md:w-[calc(50%-3rem)] hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-bold text-sm text-gray-800">处置任务: {dTask.sentimentTitle}</div>
-                      <Badge className="bg-blue-100 text-blue-700">{dTask.status}</Badge>
-                    </div>
-                    <div className="text-xs text-gray-600 mb-3 bg-gray-50 p-2 rounded line-clamp-2">
-                      措施：{dTask.measures}
-                    </div>
-                    <div className="flex gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> 截止: {dTask.deadline}</span>
-                      <span className="flex items-center gap-1"><User className="w-3 h-3"/> 负责人: {dTask.assignee}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Layer 3: Comment Tasks related to this Disposal Task */}
-              {relatedComments.length > 0 && (
-                <div className="relative pl-12 md:pl-0 space-y-6">
-                  {relatedComments.map((cTask) => (
-                    <div key={cTask.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-green-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10">
-                        <MessageSquare className="w-4 h-4 text-white" />
+      <div className="overflow-x-auto pb-2">
+        <div className="flex min-w-[1200px] items-start gap-10">
+          <div className="flex w-[340px] shrink-0 items-center">
+            <Card className="w-full border-l-4 border-l-[#ff4d4f] bg-white">
+              <CardContent className="p-5">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fff1f0]">
+                        <AlertCircle className="h-4 w-4 text-[#ff4d4f]" />
                       </div>
-                      <Card className="w-[calc(100%-3rem)] md:w-[calc(50%-3rem)] hover:shadow-md transition-shadow border-l-4 border-l-green-500 bg-green-50/30">
+                      <span className="text-sm font-medium text-[#ff4d4f]">当前事件</span>
+                    </div>
+                    <div className="line-clamp-3 text-base font-semibold text-gray-900">{sentiment.title}</div>
+                  </div>
+                  <Badge className="bg-[#fff1f0] text-[#cf1322]">{sentiment.level}</Badge>
+                </div>
+
+                <div className="space-y-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>{sentiment.publishTime}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <User className="h-3.5 w-3.5" />
+                    <span>{sentiment.createdBy} · {sentiment.source}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="h-0.5 w-10 shrink-0 bg-[#d9d9d9]" />
+          </div>
+
+          <div className="flex-1 space-y-8">
+            {branches.length > 0 ? branches.map(({ disposalTask, relatedComments }) => (
+              <div key={disposalTask.id} className="relative flex items-start gap-6">
+                <div className="absolute left-[-40px] top-10 h-0.5 w-10 bg-[#d9d9d9]" />
+
+                <div className="w-[360px] shrink-0">
+                  <Card className="border-l-4 border-l-[#1677ff] bg-white">
+                    <CardContent className="p-5">
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e6f4ff]">
+                              <ClipboardList className="h-4 w-4 text-[#1677ff]" />
+                            </div>
+                            <span className="text-sm font-medium text-[#1677ff]">处置任务</span>
+                          </div>
+                          <div className="line-clamp-2 text-sm font-semibold text-gray-900">{disposalTask.sentimentTitle}</div>
+                        </div>
+                        <Badge className="bg-[#e6f4ff] text-[#1677ff]">{disposalTask.status}</Badge>
+                      </div>
+
+                      <div className="rounded-[6px] bg-[#fafafa] p-3 text-xs leading-5 text-gray-600">
+                        {disposalTask.measures}
+                      </div>
+
+                      <div className="mt-3 space-y-2 text-xs text-gray-500">
+                        <div className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5" />
+                          <span>负责人：{disposalTask.assignee}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>截止：{disposalTask.deadline}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="flex-1 space-y-4">
+                  {relatedComments.length > 0 ? relatedComments.map((commentTask) => (
+                    <div key={commentTask.id} className="relative flex items-start gap-4 pl-8">
+                      <div className="absolute left-0 top-8 h-0.5 w-8 bg-[#d9d9d9]" />
+
+                      <Card className="w-full border-l-4 border-l-[#52c41a] bg-[#fcfff5]">
                         <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="font-bold text-sm text-gray-800">网评任务: {cTask.goal}</div>
-                            <Badge className="bg-green-100 text-green-700">{cTask.status}</Badge>
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="mb-2 flex items-center gap-2">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f6ffed]">
+                                  <MessageSquare className="h-4 w-4 text-[#52c41a]" />
+                                </div>
+                                <span className="text-sm font-medium text-[#389e0d]">网评任务</span>
+                              </div>
+                              <div className="line-clamp-2 text-sm font-semibold text-gray-900">{commentTask.goal}</div>
+                            </div>
+                            <Badge className="bg-[#f6ffed] text-[#389e0d]">{commentTask.status}</Badge>
                           </div>
-                          <div className="text-xs text-gray-600 mb-3">
-                            <span className="font-semibold text-gray-700">要求：</span>发帖 {cTask.requirements.postCount} 条 | 平台: {cTask.requirements.platforms.join(', ')}
-                          </div>
-                          <div className="flex justify-between items-center text-xs text-gray-500">
-                            <span className="flex items-center gap-1"><User className="w-3 h-3"/> 网评员: {cTask.assignee}</span>
-                            <span className="font-medium text-green-600">进度: {cTask.submissions.length}/{cTask.requirements.postCount}</span>
+
+                          <div className="space-y-2 text-xs text-gray-600">
+                            <div>
+                              发帖 {commentTask.requirements.postCount} 条 · 平台：{commentTask.requirements.platforms.join('、')}
+                            </div>
+                            <div className="flex items-center justify-between text-gray-500">
+                              <span className="flex items-center gap-2">
+                                <User className="h-3.5 w-3.5" />
+                                网评员：{commentTask.assignee}
+                              </span>
+                              <span>进度：{commentTask.submissions.length}/{commentTask.requirements.postCount}</span>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="relative rounded-[8px] border border-dashed border-[#d9d9d9] bg-white px-5 py-6 text-sm text-gray-500">
+                      <div className="absolute left-[-24px] top-1/2 h-0.5 w-6 bg-[#d9d9d9]" />
+                      当前处置任务下暂无网评任务
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            )) : (
+              <div className="relative flex items-start gap-6">
+                <div className="absolute left-[-40px] top-10 h-0.5 w-10 bg-[#d9d9d9]" />
+                <div className="w-[360px] shrink-0 rounded-[8px] border border-dashed border-[#d9d9d9] bg-white px-5 py-6 text-sm text-gray-500">
+                  当前事件尚未指派处置任务
+                </div>
+
+                {orphanCommentTasks.length > 0 ? (
+                  <div className="flex-1 space-y-4">
+                    {orphanCommentTasks.map((commentTask) => (
+                      <div key={commentTask.id} className="relative flex items-start gap-4 pl-8">
+                        <div className="absolute left-0 top-8 h-0.5 w-8 bg-[#d9d9d9]" />
+                        <Card className="w-full border-l-4 border-l-[#52c41a] bg-[#fcfff5]">
+                          <CardContent className="p-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="mb-2 flex items-center gap-2">
+                                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f6ffed]">
+                                    <MessageSquare className="h-4 w-4 text-[#52c41a]" />
+                                  </div>
+                                  <span className="text-sm font-medium text-[#389e0d]">网评任务</span>
+                                </div>
+                                <div className="line-clamp-2 text-sm font-semibold text-gray-900">{commentTask.goal}</div>
+                              </div>
+                              <Badge className="bg-[#f6ffed] text-[#389e0d]">{commentTask.status}</Badge>
+                            </div>
+
+                            <div className="space-y-2 text-xs text-gray-600">
+                              <div>
+                                发帖 {commentTask.requirements.postCount} 条 · 平台：{commentTask.requirements.platforms.join('、')}
+                              </div>
+                              <div className="flex items-center justify-between text-gray-500">
+                                <span className="flex items-center gap-2">
+                                  <User className="h-3.5 w-3.5" />
+                                  网评员：{commentTask.assignee}
+                                </span>
+                                <span>进度：{commentTask.submissions.length}/{commentTask.requirements.postCount}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

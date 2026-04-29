@@ -2,15 +2,10 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { 
   Home, 
-  AlertCircle, 
-  Send, 
   ClipboardList, 
-  MessageSquare, 
-  BarChart3,
   Bell,
   User,
   Settings,
-  Search,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
@@ -51,14 +46,7 @@ export function Layout() {
       subItems: [
         { path: '/disposal/tasks', label: '处置任务' },
         { path: '/comment-tasks/list', label: '网评任务' },
-        { path: '/comment-tasks/performance', label: '绩效管理' },
-        { path: '/comment-tasks/statistics', label: '任务统计' },
       ]
-    },
-    {
-      path: '/analytics',
-      label: '数据看板',
-      icon: BarChart3
     },
     {
       path: '/settings',

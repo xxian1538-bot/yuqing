@@ -75,7 +75,7 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white">
+      <DialogContent className="max-w-[84rem] max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
           <DialogTitle>发起网评任务</DialogTitle>
         </DialogHeader>

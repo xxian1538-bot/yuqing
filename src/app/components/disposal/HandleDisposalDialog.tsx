@@ -23,7 +23,7 @@ export function HandleDisposalDialog({ open, onOpenChange, task, onSubmit }: Han
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-white">
+      <DialogContent className="sm:max-w-[56rem] bg-white">
         <DialogHeader>
           <DialogTitle>提交处置信息</DialogTitle>
         </DialogHeader>

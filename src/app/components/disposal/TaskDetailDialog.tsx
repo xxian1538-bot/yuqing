@@ -14,7 +14,7 @@ export function TaskDetailDialog({ open, onOpenChange, task }: TaskDetailProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-white">
+      <DialogContent className="max-w-[84rem] bg-white">
         <DialogHeader>
           <DialogTitle>任务详情</DialogTitle>
         </DialogHeader>

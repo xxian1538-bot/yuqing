@@ -1,10 +1,33 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
+import type { ScoringWeights } from '../../types';
+import { useScoringConfig } from '../../context/ScoringConfigContext';
 
 export function SystemConfig() {
+  const { weights, updateWeights } = useScoringConfig();
+  const [draftWeights, setDraftWeights] = useState<ScoringWeights>(weights);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  useEffect(() => {
+    setDraftWeights(weights);
+  }, [weights]);
+
+  const weightFields: Array<{ key: keyof ScoringWeights; label: string }> = [
+    { key: 'topicWeight', label: '涉及话题分类' },
+    { key: 'attentionWeight', label: '民众关注度' },
+    { key: 'emotionWeight', label: '态度倾向' },
+    { key: 'mediaWeight', label: '传播媒体扩散度' },
+    { key: 'formatWeight', label: '传播形式' },
+    { key: 'channelWeight', label: '传播渠道' },
+    { key: 'influenceWeight', label: '账号影响力' },
+  ];
+
+  const totalWeight = Object.values(draftWeights).reduce((sum, value) => sum + value, 0);
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -32,13 +55,6 @@ export function SystemConfig() {
               </div>
               <Switch defaultChecked />
             </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>数据统计</Label>
-                <p className="text-sm text-gray-600 mt-1">启用数据统计和分析功能</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
           </CardContent>
         </Card>
 
@@ -47,56 +63,38 @@ export function SystemConfig() {
             <CardTitle>舆情评分权重配置</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>涉及话题分类</Label>
-                <span className="text-sm font-medium">10%</span>
+            {weightFields.map((field) => (
+              <div key={field.key}>
+                <div className="mb-2 flex items-center justify-between">
+                  <Label>{field.label}</Label>
+                  <span className="text-sm font-medium">{draftWeights[field.key]}%</span>
+                </div>
+                <Input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={draftWeights[field.key]}
+                  onChange={(e) => {
+                    setDraftWeights({ ...draftWeights, [field.key]: Number(e.target.value) });
+                    setSaveMessage('');
+                  }}
+                />
               </div>
-              <Input type="range" min="0" max="100" defaultValue="10" />
+            ))}
+            <div className="rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-600">
+              当前总权重：{totalWeight}%。
+              保存后仅影响后续新增舆情事件的自动评级，不影响历史舆情事件的既有等级。
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>民众关注度</Label>
-                <span className="text-sm font-medium">15%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="15" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>态度倾向</Label>
-                <span className="text-sm font-medium">15%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="15" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>传播媒体扩散度</Label>
-                <span className="text-sm font-medium">20%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="20" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>传播形式</Label>
-                <span className="text-sm font-medium">10%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="10" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>传播渠道</Label>
-                <span className="text-sm font-medium">10%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="10" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>账号影响力</Label>
-                <span className="text-sm font-medium">20%</span>
-              </div>
-              <Input type="range" min="0" max="100" defaultValue="20" />
-            </div>
-            <Button>保存权重配置</Button>
+            {saveMessage ? <div className="text-sm text-green-600">{saveMessage}</div> : null}
+            <Button
+              onClick={() => {
+                updateWeights(draftWeights);
+                setSaveMessage('权重配置已保存，后续新增舆情事件将按新权重计算。');
+              }}
+            >
+              保存权重配置
+            </Button>
           </CardContent>
         </Card>
       </div>

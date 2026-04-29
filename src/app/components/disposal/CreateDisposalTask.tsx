@@ -58,7 +58,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[84rem] bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>新建处置任务</DialogTitle>
         </DialogHeader>

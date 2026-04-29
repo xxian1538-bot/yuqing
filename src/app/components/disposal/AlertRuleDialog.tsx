@@ -103,7 +103,7 @@ export function AlertRuleDialog({ open, onOpenChange, rule, onSave }: AlertRuleD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl bg-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[72rem] bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{rule ? "编辑预警规则" : "新建预警规则"}</DialogTitle>
         </DialogHeader>

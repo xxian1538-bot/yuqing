@@ -236,8 +236,8 @@ export function SentimentStatistics() {
             <div className="grid grid-cols-4 gap-4">
               {[
                 { word: '改革', count: 156, trend: 'up' },
-                { word: 'AI技术', count: 142, trend: 'up' },
-                { word: '春节', count: 128, trend: 'down' },
+                { word: '货源投放', count: 142, trend: 'up' },
+                { word: '校园周边', count: 128, trend: 'down' },
                 { word: '社区', count: 95, trend: 'up' },
                 { word: '服务', count: 87, trend: 'up' },
                 { word: '创新', count: 76, trend: 'up' },

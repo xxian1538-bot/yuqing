@@ -6,23 +6,31 @@ import {
   Send, 
   UserPlus,
   Download,
+  Pencil,
   Eye,
   ThumbsUp,
   Share2,
   MessageSquare,
-  Star
+  Star,
+  Link2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { mockSentiments } from '../data/mockData';
 import { SentimentProcessFlow } from './SentimentProcessFlow';
+import { SentimentProcessEvaluation } from './SentimentProcessEvaluation';
+import { SentimentEditDialog } from './SentimentEditDialog';
+import { AssignDialog } from './AssignDialog';
 import type { EmotionTrend, SentimentStatus } from '../types';
+import { useSentimentData } from '../context/SentimentDataContext';
 
 export function SentimentDetail() {
   const { id } = useParams();
-  const sentiment = mockSentiments.find(s => s.id === id);
+  const { sentiments, updateSentiment } = useSentimentData();
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const sentiment = sentiments.find(s => s.id === id);
 
   if (!sentiment) {
     return (
@@ -36,6 +44,16 @@ export function SentimentDetail() {
       </div>
     );
   }
+
+  const relatedGroupIds = Array.from(new Set([
+    sentiment.id,
+    sentiment.primaryEventId,
+    ...(sentiment.relatedEventIds || []),
+  ].filter(Boolean))) as string[];
+  const relatedEvents = sentiments
+    .filter(item => relatedGroupIds.includes(item.id))
+    .sort((a, b) => new Date(a.publishTime).getTime() - new Date(b.publishTime).getTime());
+  const hasRelatedEvents = relatedEvents.length > 1;
 
   // 获取状态标签样式
   const getStatusBadge = (status: SentimentStatus) => {
@@ -102,6 +120,10 @@ export function SentimentDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsEditOpen(true)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              编辑事件
+            </Button>
             <Button variant="outline">
               <Download className="w-4 h-4 mr-2" />
               导出
@@ -110,7 +132,7 @@ export function SentimentDetail() {
               <Send className="w-4 h-4 mr-2" />
               报送
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setIsAssignOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" />
               指派任务
             </Button>
@@ -155,6 +177,42 @@ export function SentimentDetail() {
             <div className="text-xl font-semibold">{sentiment.collectCount.toLocaleString()}</div>
           </div>
         </div>
+
+        <div className="mt-6 space-y-5 border-t border-gray-200 pt-6">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900">内容摘要</h3>
+            <p className="text-sm leading-6 text-gray-700">{sentiment.summary}</p>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900">完整内容</h3>
+            <div className="rounded-lg bg-gray-50 p-4">
+              <p className="text-sm leading-6 text-gray-700">{sentiment.content}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">原文链接</h3>
+              <a
+                href={sentiment.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 hover:underline"
+              >
+                {sentiment.link}
+                <ExternalLink className="ml-1 h-4 w-4" />
+              </a>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">研判意见</h3>
+              <div className="rounded-lg bg-blue-50 p-4">
+                <p className="text-sm leading-6 text-gray-700">{sentiment.analysis}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 详细信息 */}
@@ -162,11 +220,9 @@ export function SentimentDetail() {
         <div className="px-6 pt-4">
           <TabsList>
             <TabsTrigger value="process">全景链路视图</TabsTrigger>
-            <TabsTrigger value="content">舆情内容</TabsTrigger>
-            <TabsTrigger value="analysis">情感分析</TabsTrigger>
-            <TabsTrigger value="spread">传播轨迹</TabsTrigger>
-            <TabsTrigger value="comments">相关评论</TabsTrigger>
+            {hasRelatedEvents && <TabsTrigger value="timeline">舆情事件脉络</TabsTrigger>}
             <TabsTrigger value="disposal">处置记录</TabsTrigger>
+            <TabsTrigger value="evaluation">处置过程自动评价</TabsTrigger>
           </TabsList>
         </div>
 
@@ -174,227 +230,56 @@ export function SentimentDetail() {
           <SentimentProcessFlow sentimentId={sentiment.id} />
         </TabsContent>
 
-        <TabsContent value="content" className="p-6">
-          <div className="space-y-6">
-            <div>
-              <h3 className="font-semibold mb-3">内容摘要</h3>
-              <p className="text-gray-700 leading-relaxed">{sentiment.summary}</p>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold mb-3">完整内容</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-gray-700 leading-relaxed">{sentiment.content}</p>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-3">原文链接</h3>
-              <a 
-                href={sentiment.link} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center text-blue-600 hover:underline"
-              >
-                {sentiment.link}
-                <ExternalLink className="w-4 h-4 ml-1" />
-              </a>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-3">研判意见</h3>
-              <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-gray-700 leading-relaxed">{sentiment.analysis}</p>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analysis" className="p-6">
-          <div className="space-y-6">
+        {hasRelatedEvents && (
+          <TabsContent value="timeline" className="p-6">
             <Card>
               <CardHeader>
-                <CardTitle>情感倾向分析</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">正面情绪</span>
-                      <span className="text-sm font-medium">
-                        {sentiment.emotionTrend === '正面' ? '85%' : '15%'}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-green-500"
-                        style={{ width: sentiment.emotionTrend === '正面' ? '85%' : '15%' }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">中性情绪</span>
-                      <span className="text-sm font-medium">
-                        {sentiment.emotionTrend === '中性' ? '70%' : '10%'}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gray-500"
-                        style={{ width: sentiment.emotionTrend === '中性' ? '70%' : '10%' }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-600">负面情绪</span>
-                      <span className="text-sm font-medium">
-                        {sentiment.emotionTrend === '负面' ? '80%' : '5%'}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-red-500"
-                        style={{ width: sentiment.emotionTrend === '负面' ? '80%' : '5%' }}
-                      />
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-blue-600" />
+                    舆情事件脉络
+                  </CardTitle>
+                  <Badge variant="outline">共 {relatedEvents.length} 条关联事件</Badge>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>高频关键词</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {['改革', '礼金', '习俗', '传统', '现代', '观念', '讨论', '网友'].map((keyword) => (
-                    <Badge key={keyword} variant="outline" className="px-3 py-1">
-                      {keyword}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                <div className="space-y-0">
+                  {relatedEvents.map((event, index) => {
+                    const isPrimary = event.primaryEventId === event.id;
+                    const isCurrent = event.id === sentiment.id;
 
-            {sentiment.score && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>舆情评分</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4">
-                    <div className="text-4xl font-semibold text-blue-600">{sentiment.score}</div>
-                    <div className="text-sm text-gray-600">
-                      综合评分基于话题分类、关注度、情感倾向、媒体扩散度、传播形式、传播渠道和账号影响力等多个维度
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="spread" className="p-6">
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>传播渠道分布</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {sentiment.source.split('、').map((channel, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm">{channel}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-blue-500"
-                            style={{ width: `${80 - index * 15}%` }}
-                          />
+                    return (
+                      <div key={event.id} className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-3 h-3 rounded-full ${isPrimary ? 'bg-blue-600' : 'bg-gray-400'}`} />
+                          {index < relatedEvents.length - 1 && <div className="w-0.5 flex-1 bg-gray-200" />}
                         </div>
-                        <span className="text-sm text-gray-600 w-12 text-right">
-                          {80 - index * 15}%
-                        </span>
+                        <div className="flex-1 pb-6">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{event.publishTime}</span>
+                            {isPrimary && <Badge className="bg-blue-100 text-blue-700">主事件</Badge>}
+                            {isCurrent && <Badge variant="outline">当前事件</Badge>}
+                          </div>
+                          <a
+                            href={`/sentiment/${event.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-start gap-1 font-medium text-blue-600 hover:underline"
+                          >
+                            <span>{event.title}</span>
+                            <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0" />
+                          </a>
+                          <div className="mt-2 text-sm text-gray-600 line-clamp-2">{event.summary}</div>
+                          <div className="mt-2 text-xs text-gray-500">{event.source} · {event.field}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>传播时间线</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-3 h-3 bg-blue-600 rounded-full" />
-                      <div className="w-0.5 h-full bg-gray-200" />
-                    </div>
-                    <div className="flex-1 pb-4">
-                      <div className="text-sm font-medium mb-1">{sentiment.publishTime}</div>
-                      <div className="text-sm text-gray-600">舆情首次发布</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-3 h-3 bg-blue-600 rounded-full" />
-                      <div className="w-0.5 h-full bg-gray-200" />
-                    </div>
-                    <div className="flex-1 pb-4">
-                      <div className="text-sm font-medium mb-1">2小时后</div>
-                      <div className="text-sm text-gray-600">传播至主流媒体平台</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="w-3 h-3 bg-blue-600 rounded-full" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium mb-1">6小时后</div>
-                      <div className="text-sm text-gray-600">达到传播峰值</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="comments" className="p-6">
-          <div className="space-y-4">
-            {[
-              { user: '网友A', time: '2小时前', content: '这个问题确实值得讨论，不同地方习俗差异很大', emotion: '中性' },
-              { user: '网友B', time: '3小时前', content: '我觉得应该相互理解，重要的是心意', emotion: '正面' },
-              { user: '网友C', time: '5小时前', content: '太贵了吧，压力很大啊', emotion: '负面' },
-            ].map((comment, index) => (
-              <div key={index} className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-300 rounded-full" />
-                    <div>
-                      <div className="font-medium text-sm">{comment.user}</div>
-                      <div className="text-xs text-gray-500">{comment.time}</div>
-                    </div>
-                  </div>
-                  <Badge className={
-                    comment.emotion === '正面' ? 'bg-green-100 text-green-700' :
-                    comment.emotion === '负面' ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-700'
-                  }>
-                    {comment.emotion}
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-700">{comment.content}</p>
-              </div>
-            ))}
-          </div>
-        </TabsContent>
+          </TabsContent>
+        )}
 
         <TabsContent value="disposal" className="p-6">
           <div className="space-y-4">
@@ -448,7 +333,25 @@ export function SentimentDetail() {
             )}
           </div>
         </TabsContent>
+
+        <TabsContent value="evaluation" className="p-6">
+          <SentimentProcessEvaluation sentimentId={sentiment.id} />
+        </TabsContent>
       </Tabs>
+
+      <SentimentEditDialog
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        sentiment={sentiment}
+        onSubmit={(updates) => updateSentiment(sentiment.id, updates)}
+      />
+
+      <AssignDialog
+        open={isAssignOpen}
+        onOpenChange={setIsAssignOpen}
+        sentimentId={sentiment.id}
+        sentimentLevel={sentiment.level}
+      />
     </div>
   );
 }

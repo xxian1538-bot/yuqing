@@ -71,7 +71,7 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, onSubmit }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
+      <DialogContent className="max-w-[96rem] max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
           <DialogTitle>执行网评任务：{task.sentimentTitle}</DialogTitle>
         </DialogHeader>

@@ -5,11 +5,10 @@ import {
   Download, 
   Trash2, 
   Eye,
+  Link2,
+  Pencil,
   Search,
   Filter,
-  Calendar,
-  ChevronDown,
-  ChevronRight,
   ExternalLink,
   Send,
   UserPlus
@@ -27,14 +26,19 @@ import {
   TableRow,
 } from './ui/table';
 import { Checkbox } from './ui/checkbox';
-import { mockSentiments } from '../data/mockData';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Label } from './ui/label';
 import { ManualEntryForm } from './ManualEntryForm';
 import { ReportDialog } from './ReportDialog';
 import { AssignDialog } from './AssignDialog';
+import { SentimentEditDialog } from './SentimentEditDialog';
 import type { SentimentInfo, SentimentStatus, EmotionTrend } from '../types';
+import { getAssociationGroupIds } from '../utils/sentimentAssociations';
+import { useSentimentData } from '../context/SentimentDataContext';
 
 export function SentimentList() {
-  const [sentiments, setSentiments] = useState<SentimentInfo[]>(mockSentiments);
+  const { sentiments, addSentiment, updateSentiment, updateSentimentStatus, associateEvents } = useSentimentData();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<SentimentStatus | '全部'>('全部');
@@ -42,13 +46,18 @@ export function SentimentList() {
   const [dateRange, setDateRange] = useState('全部');
   const [currentPage, setCurrentPage] = useState(1);
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [isAssociateOpen, setIsAssociateOpen] = useState(false);
+  const [primaryEventId, setPrimaryEventId] = useState('');
 
   // 弹窗状态
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [currentSentiment, setCurrentSentiment] = useState<SentimentInfo | null>(null);
 
   const pageSize = 20;
+  const associationGroupIds = getAssociationGroupIds(sentiments, selectedIds);
+  const associationCandidates = sentiments.filter(sentiment => associationGroupIds.includes(sentiment.id));
 
   // 筛选逻辑
   const filteredSentiments = sentiments.filter(sentiment => {
@@ -88,6 +97,25 @@ export function SentimentList() {
     } else {
       setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
     }
+  };
+
+  const openAssociateDialog = () => {
+    if (selectedIds.length < 2) {
+      return;
+    }
+
+    setPrimaryEventId(selectedIds[0]);
+    setIsAssociateOpen(true);
+  };
+
+  const handleAssociate = () => {
+    if (!primaryEventId) {
+      return;
+    }
+
+    associateEvents(selectedIds, primaryEventId);
+    setSelectedIds([]);
+    setIsAssociateOpen(false);
   };
 
   // 获取状态标签样式
@@ -145,6 +173,10 @@ export function SentimentList() {
           <Button variant="outline" disabled={selectedIds.length === 0}>
             <UserPlus className="w-4 h-4 mr-2" />
             批量指派
+          </Button>
+          <Button variant="outline" disabled={selectedIds.length < 2} onClick={openAssociateDialog}>
+            <Link2 className="w-4 h-4 mr-2" />
+            手动关联
           </Button>
           <Button variant="outline" disabled={selectedIds.length === 0}>
             <Trash2 className="w-4 h-4 mr-2" />
@@ -268,16 +300,24 @@ export function SentimentList() {
                   />
                 </TableCell>
                 <TableCell className="max-w-[200px] xl:max-w-[300px] whitespace-normal">
-                  <a
-                    href={sentiment.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-blue-600 hover:underline line-clamp-2 inline-block align-middle"
-                    title={sentiment.title}
-                  >
-                    {sentiment.title}
-                    <ExternalLink className="w-3 h-3 inline-block ml-1" style={{ verticalAlign: 'middle', marginTop: '-2px' }} />
-                  </a>
+                  <div className="space-y-1">
+                    <a
+                      href={sentiment.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-blue-600 hover:underline line-clamp-2 inline-block align-middle"
+                      title={sentiment.title}
+                    >
+                      {sentiment.title}
+                      <ExternalLink className="w-3 h-3 inline-block ml-1" style={{ verticalAlign: 'middle', marginTop: '-2px' }} />
+                    </a>
+                    {sentiment.relatedEventIds?.length ? (
+                      <div className="flex items-center gap-1 text-xs text-blue-600">
+                        <Link2 className="w-3 h-3" />
+                        <span>{sentiment.primaryEventId === sentiment.id ? '主事件' : '关联事件'}</span>
+                      </div>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {/* <Badge className={
@@ -317,6 +357,17 @@ export function SentimentList() {
                         详情
                       </Button>
                     </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentSentiment(sentiment);
+                        setIsEditOpen(true);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      编辑
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -418,22 +469,76 @@ export function SentimentList() {
             createdBy: '当前用户',
             score: data.score
           };
-          setSentiments([newSentiment, ...sentiments]);
+          addSentiment(newSentiment);
         }}
       />
 
       <ReportDialog
         open={isReportOpen}
         onOpenChange={setIsReportOpen}
-        sentimentId={currentSentiment?.id || ""}        onSuccess={() => {          if (currentSentiment) {            setSentiments(sentiments.map(s =>               s.id === currentSentiment.id ? { ...s, status: "已报送" } : s            ));          }        }}
+        sentimentId={currentSentiment?.id || ""}
+        onSuccess={() => {
+          if (currentSentiment) {
+            updateSentimentStatus(currentSentiment.id, '已报送');
+          }
+        }}
       />
 
       <AssignDialog
         open={isAssignOpen}
         onOpenChange={setIsAssignOpen}
-        sentimentId={currentSentiment?.id || ""}        onSuccess={() => {          if (currentSentiment) {            setSentiments(sentiments.map(s =>               s.id === currentSentiment.id ? { ...s, status: "已报送" } : s            ));          }        }}
+        sentimentId={currentSentiment?.id || ""}
         sentimentLevel={currentSentiment?.level || "一般"}
       />
+
+      <SentimentEditDialog
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        sentiment={currentSentiment}
+        onSubmit={(updates) => {
+          if (currentSentiment) {
+            updateSentiment(currentSentiment.id, updates);
+          }
+        }}
+      />
+
+      <Dialog open={isAssociateOpen} onOpenChange={setIsAssociateOpen}>
+        <DialogContent className="sm:max-w-[84rem]">
+          <DialogHeader>
+            <DialogTitle>手动关联舆情事件</DialogTitle>
+            <DialogDescription>
+              已选择 {selectedIds.length} 条舆情。请选择其中一条作为主事件，关联后可在详情页查看事件脉络。
+            </DialogDescription>
+          </DialogHeader>
+
+          <RadioGroup value={primaryEventId} onValueChange={setPrimaryEventId} className="max-h-[360px] overflow-y-auto pr-2">
+            {associationCandidates.map((sentiment) => (
+              <Label
+                key={sentiment.id}
+                htmlFor={`primary-${sentiment.id}`}
+                className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50"
+              >
+                <RadioGroupItem id={`primary-${sentiment.id}`} value={sentiment.id} className="mt-1" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-gray-900 line-clamp-2">{sentiment.title}</div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {sentiment.publishTime} · {sentiment.source}
+                  </div>
+                </div>
+              </Label>
+            ))}
+          </RadioGroup>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssociateOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAssociate} disabled={!primaryEventId}>
+              确认关联
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

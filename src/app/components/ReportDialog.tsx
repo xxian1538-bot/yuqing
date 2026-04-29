@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "\./ui/dialog";
 import { Button } from "\./ui/button";
 import { Label } from "\./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "\./ui/select";
-import { Input } from "\./ui/input";
+import { Textarea } from "./ui/textarea";
 
 interface ReportDialogProps {
   open: boolean;
@@ -15,12 +15,15 @@ interface ReportDialogProps {
 export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: ReportDialogProps) {
   const [targetType, setTargetType] = useState("person");
   const [target, setTarget] = useState("");
+  const [reportNote, setReportNote] = useState("");
 
   const handleSubmit = () => {
     if (!target) {
       alert("请选择报送目标");
       return;
     }
+
+    alert(`报送成功\n关联舆情: ${sentimentId}\n报送目标: ${target}\n报送说明: ${reportNote || "无"}`);
     
     // 调用成功回调以更新列表状态
     if (onSuccess) {
@@ -30,9 +33,17 @@ export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: Rep
     onOpenChange(false);
   };
 
+  useEffect(() => {
+    if (!open) {
+      setTargetType("person");
+      setTarget("");
+      setReportNote("");
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-white">
+      <DialogContent className="sm:max-w-[42rem] bg-white">
         <DialogHeader>
           <DialogTitle>舆情报送</DialogTitle>
         </DialogHeader>
@@ -88,6 +99,15 @@ export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: Rep
                 )}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>报送说明</Label>
+            <Textarea
+              value={reportNote}
+              onChange={(e) => setReportNote(e.target.value)}
+              className="min-h-24"
+              placeholder="请输入本次报送的说明、背景或需要重点关注的信息"
+            />
           </div>
         </div>
         <div className="flex justify-end gap-3">

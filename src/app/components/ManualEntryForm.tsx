@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { SentimentInfo, SentimentLevel } from "../../types";
+import { useScoringConfig } from "../context/ScoringConfigContext";
 
 interface ManualEntryFormProps {
   open: boolean;
@@ -13,6 +14,7 @@ interface ManualEntryFormProps {
 }
 
 export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFormProps) {
+  const { weights } = useScoringConfig();
   const [formData, setFormData] = useState({
     title: "",
     link: "",
@@ -32,48 +34,27 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
   });
 
   const [calculatedLevel, setCalculatedLevel] = useState<SentimentLevel | null>(null);
+  const [calculatedScore, setCalculatedScore] = useState<number | null>(null);
 
   const calculateLevel = () => {
-    // 根据权重计算分数的逻辑
-    let score = 0;
-    
-    // 1. 话题分类 (10%)
-    if (formData.topic === "敏感") score += 10;
-    else if (formData.topic === "普通") score += 5;
+    const ratioScore =
+      (formData.topic === "敏感" ? 1 : formData.topic === "普通" ? 0.5 : 0) * weights.topicWeight +
+      (formData.attention === "高" ? 1 : formData.attention === "中" ? 8 / 15 : formData.attention === "低" ? 3 / 15 : 0) * weights.attentionWeight +
+      ({ "轻微": 3 / 15, "一般": 6 / 15, "较大": 10 / 15, "重大": 13 / 15, "特别重大": 1 }[formData.emotion as keyof Record<string, number>] || 0) * weights.emotionWeight +
+      ({ "50%以下": 4 / 20, "50%-100%": 8 / 20, "100%-500%": 12 / 20, "500-1000%": 16 / 20, "1000%以上": 1 }[formData.mediaSpread as keyof Record<string, number>] || 0) * weights.mediaWeight +
+      ({ "文字": 2 / 10, "图文": 4 / 10, "音频": 6 / 10, "视频": 8 / 10, "视频+实图": 1 }[formData.format as keyof Record<string, number>] || 0) * weights.formatWeight +
+      ({ "权威媒体": 1, "自媒体": 0.6, "论坛": 0.3 }[formData.channel as keyof Record<string, number>] || 0) * weights.channelWeight +
+      ({
+        "个人账号及自媒体": 4 / 20,
+        "行业门户或有一定影响力的自媒体": 8 / 20,
+        "加V账号或粉丝1000以上": 12 / 20,
+        "大V账号或粉丝3000以上": 16 / 20,
+        "粉丝5000以上": 1,
+      }[formData.influence as keyof Record<string, number>] || 0) * weights.influenceWeight;
 
-    // 2. 民众关注度 (15%)
-    if (formData.attention === "高") score += 15;
-    else if (formData.attention === "中") score += 8;
-    else if (formData.attention === "低") score += 3;
+    const totalWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
+    const score = totalWeight > 0 ? Math.round((ratioScore / totalWeight) * 100) : 0;
 
-    // 3. 态度倾向 (15%)
-    const emotionScore = { "轻微": 3, "一般": 6, "较大": 10, "重大": 13, "特别重大": 15 };
-    score += emotionScore[formData.emotion as keyof typeof emotionScore] || 0;
-
-    // 4. 传播媒体扩散度 (20%)
-    const spreadScore = { "50%以下": 4, "50%-100%": 8, "100%-500%": 12, "500-1000%": 16, "1000%以上": 20 };
-    score += spreadScore[formData.mediaSpread as keyof typeof spreadScore] || 0;
-
-    // 5. 传播形式 (10%)
-    const formatScore = { "文字": 2, "图文": 4, "音频": 6, "视频": 8, "视频+实图": 10 };
-    score += formatScore[formData.format as keyof typeof formatScore] || 0;
-
-    // 6. 传播渠道 (10%)
-    if (formData.channel === "权威媒体") score += 10;
-    else if (formData.channel === "自媒体") score += 6;
-    else if (formData.channel === "论坛") score += 3;
-
-    // 7. 账号影响力 (20%)
-    const influenceScore = {
-      "个人账号及自媒体": 4,
-      "行业门户或有一定影响力的自媒体": 8,
-      "加V账号或粉丝1000以上": 12,
-      "大V账号或粉丝3000以上": 16,
-      "粉丝5000以上": 20
-    };
-    score += influenceScore[formData.influence as keyof typeof influenceScore] || 0;
-
-    // 判断等级
     let level: SentimentLevel = "轻微";
     if (score >= 85) level = "特别重大";
     else if (score >= 70) level = "重大";
@@ -82,6 +63,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
     else level = "轻微";
 
     setCalculatedLevel(level);
+    setCalculatedScore(score);
   };
 
   const handleSubmit = () => {
@@ -89,14 +71,14 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
       ...formData,
       level: calculatedLevel || "轻微",
       readCount: parseInt(formData.readCount) || 0,
-      score: 100 // 可以改为计算的实际分数
+      score: calculatedScore || 0
     });
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
+      <DialogContent className="max-w-[112rem] max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
           <DialogTitle>手动添加舆情事件</DialogTitle>
         </DialogHeader>
@@ -256,7 +238,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                   <span className="font-semibold">计算结果：</span>当前系统判定的舆情等级为
                   <span className="font-bold text-lg ml-2">{calculatedLevel}</span>
                 </div>
-                <div className="text-sm opacity-80">根据权重自动计算</div>
+                <div className="text-sm opacity-80">评分 {calculatedScore ?? 0} / 100</div>
               </div>
             )}
           </div>

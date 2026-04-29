@@ -13,7 +13,7 @@ export function RedirectToCommentTasksList() {
 }
 
 export function RedirectToAnalyticsSentiment() {
-  return <Navigate to="/analytics/sentiment" replace />;
+  return <Navigate to="/" replace />;
 }
 
 export function RedirectToSettingsSystem() {
