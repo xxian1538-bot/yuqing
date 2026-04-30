@@ -7,6 +7,76 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { SentimentInfo, SentimentLevel } from "../../types";
 import { useScoringConfig } from "../context/ScoringConfigContext";
 
+interface ScoredOption {
+  value: string;
+  label: string;
+  score: number;
+}
+
+const topicOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 针对包括但不限于生产经营管理领域、员工个人行为的一般见解及观点" },
+  { value: "20", score: 20, label: "20分 - 针对包括但不限于生产经营管理领域、员工个人行为吐槽性质话题" },
+  { value: "30", score: 30, label: "30分 - 针对包括但不限于行政许可、客户服务、员工招录满意度及规范性的投诉" },
+  { value: "50", score: 50, label: "50分 - 针对包括但不限于控烟履约、薪酬、专卖执法等重点领域攻击性话题" },
+  { value: "100", score: 100, label: "100分 - 针对包括但不限于行业体制机制等核心领域的恶意攻击" },
+];
+
+const attentionOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 单条舆情转评赞均在10以下" },
+  { value: "20", score: 20, label: "20分 - 单条舆情转评赞在10-1000之间" },
+  { value: "30", score: 30, label: "30分 - 单条舆情转评赞在1000-10000之间" },
+  { value: "50", score: 50, label: "50分 - 单条舆情信息转评赞1万-5万" },
+  { value: "100", score: 100, label: "100分 - 单条舆情转评赞5万以上" },
+];
+
+const emotionOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 轻微" },
+  { value: "20", score: 20, label: "20分 - 一般" },
+  { value: "30", score: 30, label: "30分 - 较强烈" },
+  { value: "50", score: 50, label: "50分 - 强烈" },
+  { value: "100", score: 100, label: "100分 - 极端" },
+];
+
+const mediaSpreadOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 50%以下" },
+  { value: "20", score: 20, label: "20分 - 50%-100%" },
+  { value: "30", score: 30, label: "30分 - 100%-500%" },
+  { value: "50", score: 50, label: "50分 - 500%-1000%" },
+  { value: "100", score: 100, label: "100分 - 1000%以上" },
+];
+
+const formatOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 文字" },
+  { value: "20", score: 20, label: "20分 - 图文" },
+  { value: "30", score: 30, label: "30分 - 音频" },
+  { value: "50", score: 50, label: "50分 - 视频" },
+  { value: "100", score: 100, label: "100分 - 视频+实图" },
+];
+
+const channelOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 一般性论坛博客、微信公众号" },
+  { value: "20", score: 20, label: "20分 - 网易、搜狐、百度百家等" },
+  { value: "30", score: 30, label: "30分 - 微博、微信、小红书及区县级电视台、问诊平台等" },
+  { value: "50", score: 50, label: "50分 - 今日头条、抖音及省级电视台、问诊平台等" },
+  { value: "100", score: 100, label: "100分 - 全国性媒体及问诊平台" },
+];
+
+const influenceOptions: ScoredOption[] = [
+  { value: "10", score: 10, label: "10分 - 一般性个人账号及自媒体" },
+  { value: "20", score: 20, label: "20分 - 行业门户或具有一定影响力的自媒体" },
+  { value: "30", score: 30, label: "30分 - 加V账号或粉丝1000人以上" },
+  { value: "50", score: 50, label: "50分 - 大V账号或粉丝3000人以上" },
+  { value: "100", score: 100, label: "100分 - 粉丝5000人以上" },
+];
+
+function getOptionScore(options: ScoredOption[], value: string) {
+  return options.find((option) => option.value === value)?.score || 0;
+}
+
+function getWeightedScore(score: number, weight: number) {
+  return Number(((score / 100) * weight).toFixed(2));
+}
+
 interface ManualEntryFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -21,7 +91,11 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
     summary: "", // 研判建议
     publishTime: "",
     source: "", // 来源平台
-    readCount: "", // 互动量 - 阅读数
+    readCount: "",
+    likeCount: "",
+    shareCount: "",
+    commentCount: "",
+    collectCount: "",
     
     // 评估维度
     topic: "",
@@ -36,21 +110,25 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
   const [calculatedLevel, setCalculatedLevel] = useState<SentimentLevel | null>(null);
   const [calculatedScore, setCalculatedScore] = useState<number | null>(null);
 
+  const dimensionScores = {
+    topic: getOptionScore(topicOptions, formData.topic),
+    attention: getOptionScore(attentionOptions, formData.attention),
+    emotion: getOptionScore(emotionOptions, formData.emotion),
+    mediaSpread: getOptionScore(mediaSpreadOptions, formData.mediaSpread),
+    format: getOptionScore(formatOptions, formData.format),
+    channel: getOptionScore(channelOptions, formData.channel),
+    influence: getOptionScore(influenceOptions, formData.influence),
+  };
+
   const calculateLevel = () => {
     const ratioScore =
-      (formData.topic === "敏感" ? 1 : formData.topic === "普通" ? 0.5 : 0) * weights.topicWeight +
-      (formData.attention === "高" ? 1 : formData.attention === "中" ? 8 / 15 : formData.attention === "低" ? 3 / 15 : 0) * weights.attentionWeight +
-      ({ "轻微": 3 / 15, "一般": 6 / 15, "较大": 10 / 15, "重大": 13 / 15, "特别重大": 1 }[formData.emotion as keyof Record<string, number>] || 0) * weights.emotionWeight +
-      ({ "50%以下": 4 / 20, "50%-100%": 8 / 20, "100%-500%": 12 / 20, "500-1000%": 16 / 20, "1000%以上": 1 }[formData.mediaSpread as keyof Record<string, number>] || 0) * weights.mediaWeight +
-      ({ "文字": 2 / 10, "图文": 4 / 10, "音频": 6 / 10, "视频": 8 / 10, "视频+实图": 1 }[formData.format as keyof Record<string, number>] || 0) * weights.formatWeight +
-      ({ "权威媒体": 1, "自媒体": 0.6, "论坛": 0.3 }[formData.channel as keyof Record<string, number>] || 0) * weights.channelWeight +
-      ({
-        "个人账号及自媒体": 4 / 20,
-        "行业门户或有一定影响力的自媒体": 8 / 20,
-        "加V账号或粉丝1000以上": 12 / 20,
-        "大V账号或粉丝3000以上": 16 / 20,
-        "粉丝5000以上": 1,
-      }[formData.influence as keyof Record<string, number>] || 0) * weights.influenceWeight;
+      (getOptionScore(topicOptions, formData.topic) / 100) * weights.topicWeight +
+      (getOptionScore(attentionOptions, formData.attention) / 100) * weights.attentionWeight +
+      (getOptionScore(emotionOptions, formData.emotion) / 100) * weights.emotionWeight +
+      (getOptionScore(mediaSpreadOptions, formData.mediaSpread) / 100) * weights.mediaWeight +
+      (getOptionScore(formatOptions, formData.format) / 100) * weights.formatWeight +
+      (getOptionScore(channelOptions, formData.channel) / 100) * weights.channelWeight +
+      (getOptionScore(influenceOptions, formData.influence) / 100) * weights.influenceWeight;
 
     const totalWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
     const score = totalWeight > 0 ? Math.round((ratioScore / totalWeight) * 100) : 0;
@@ -71,6 +149,10 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
       ...formData,
       level: calculatedLevel || "轻微",
       readCount: parseInt(formData.readCount) || 0,
+      likeCount: parseInt(formData.likeCount) || 0,
+      shareCount: parseInt(formData.shareCount) || 0,
+      commentCount: parseInt(formData.commentCount) || 0,
+      collectCount: parseInt(formData.collectCount) || 0,
       score: calculatedScore || 0
     });
     onOpenChange(false);
@@ -114,9 +196,30 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <Label>发帖时间</Label>
                 <Input type="datetime-local" value={formData.publishTime} onChange={e => setFormData({...formData, publishTime: e.target.value})} />
               </div>
-              <div className="space-y-2">
-                <Label>互动量 (阅读数/点赞数等)</Label>
-                <Input type="number" value={formData.readCount} onChange={e => setFormData({...formData, readCount: e.target.value})} placeholder="输入数量" />
+              <div className="space-y-2 col-span-2">
+                <Label>互动量数据</Label>
+                <div className="grid grid-cols-5 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-500">阅读量</Label>
+                    <Input type="number" min="0" value={formData.readCount} onChange={e => setFormData({...formData, readCount: e.target.value})} placeholder="0" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-500">点赞量</Label>
+                    <Input type="number" min="0" value={formData.likeCount} onChange={e => setFormData({...formData, likeCount: e.target.value})} placeholder="0" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-500">分享/转发</Label>
+                    <Input type="number" min="0" value={formData.shareCount} onChange={e => setFormData({...formData, shareCount: e.target.value})} placeholder="0" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-500">评论量</Label>
+                    <Input type="number" min="0" value={formData.commentCount} onChange={e => setFormData({...formData, commentCount: e.target.value})} placeholder="0" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-500">收藏量</Label>
+                    <Input type="number" min="0" value={formData.collectCount} onChange={e => setFormData({...formData, collectCount: e.target.value})} placeholder="0" />
+                  </div>
+                </div>
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>研判建议</Label>
@@ -135,92 +238,120 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>涉及话题分类 (10%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>涉及话题分类 (10%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.topic || "-"} / 加权 {getWeightedScore(dimensionScores.topic, weights.topicWeight)}
+                  </span>
+                </div>
                 <Select value={formData.topic} onValueChange={v => setFormData({...formData, topic: v})}>
                   <SelectTrigger><SelectValue placeholder="选择话题分类" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="敏感">敏感话题</SelectItem>
-                    <SelectItem value="普通">普通话题</SelectItem>
+                    {topicOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>命中关注度 (15%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>命中关注度 (15%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.attention || "-"} / 加权 {getWeightedScore(dimensionScores.attention, weights.attentionWeight)}
+                  </span>
+                </div>
                 <Select value={formData.attention} onValueChange={v => setFormData({...formData, attention: v})}>
                   <SelectTrigger><SelectValue placeholder="选择关注度" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="高">高</SelectItem>
-                    <SelectItem value="中">中</SelectItem>
-                    <SelectItem value="低">低</SelectItem>
+                    {attentionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>态度倾向 (15%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>态度倾向 (15%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.emotion || "-"} / 加权 {getWeightedScore(dimensionScores.emotion, weights.emotionWeight)}
+                  </span>
+                </div>
                 <Select value={formData.emotion} onValueChange={v => setFormData({...formData, emotion: v})}>
                   <SelectTrigger><SelectValue placeholder="选择倾向" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="轻微">轻微</SelectItem>
-                    <SelectItem value="一般">一般</SelectItem>
-                    <SelectItem value="较大">较大</SelectItem>
-                    <SelectItem value="重大">重大</SelectItem>
-                    <SelectItem value="特别重大">特别重大</SelectItem>
+                    {emotionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>传播媒体扩散度 (20%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>传播媒体扩散度 (20%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.mediaSpread || "-"} / 加权 {getWeightedScore(dimensionScores.mediaSpread, weights.mediaWeight)}
+                  </span>
+                </div>
                 <Select value={formData.mediaSpread} onValueChange={v => setFormData({...formData, mediaSpread: v})}>
                   <SelectTrigger><SelectValue placeholder="选择扩散度" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="50%以下">50%以下</SelectItem>
-                    <SelectItem value="50%-100%">50%-100%</SelectItem>
-                    <SelectItem value="100%-500%">100%-500%</SelectItem>
-                    <SelectItem value="500-1000%">500-1000%</SelectItem>
-                    <SelectItem value="1000%以上">1000%以上</SelectItem>
+                    {mediaSpreadOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>传播形式 (10%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>传播形式 (10%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.format || "-"} / 加权 {getWeightedScore(dimensionScores.format, weights.formatWeight)}
+                  </span>
+                </div>
                 <Select value={formData.format} onValueChange={v => setFormData({...formData, format: v})}>
                   <SelectTrigger><SelectValue placeholder="选择形式" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="文字">文字</SelectItem>
-                    <SelectItem value="图文">图文</SelectItem>
-                    <SelectItem value="音频">音频</SelectItem>
-                    <SelectItem value="视频">视频</SelectItem>
-                    <SelectItem value="视频+实图">视频+实图</SelectItem>
+                    {formatOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>传播渠道 (10%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>传播渠道 (10%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.channel || "-"} / 加权 {getWeightedScore(dimensionScores.channel, weights.channelWeight)}
+                  </span>
+                </div>
                 <Select value={formData.channel} onValueChange={v => setFormData({...formData, channel: v})}>
                   <SelectTrigger><SelectValue placeholder="选择渠道" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="权威媒体">权威媒体</SelectItem>
-                    <SelectItem value="自媒体">自媒体</SelectItem>
-                    <SelectItem value="论坛">论坛/社区</SelectItem>
+                    {channelOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2 col-span-2">
-                <Label>账号影响力 (20%)</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>账号影响力 (20%)</Label>
+                  <span className="text-xs text-gray-500">
+                    原始分 {dimensionScores.influence || "-"} / 加权 {getWeightedScore(dimensionScores.influence, weights.influenceWeight)}
+                  </span>
+                </div>
                 <Select value={formData.influence} onValueChange={v => setFormData({...formData, influence: v})}>
                   <SelectTrigger><SelectValue placeholder="选择影响力" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="个人账号及自媒体">个人账号及自媒体</SelectItem>
-                    <SelectItem value="行业门户或有一定影响力的自媒体">行业门户或有一定影响力的自媒体</SelectItem>
-                    <SelectItem value="加V账号或粉丝1000以上">加V账号或粉丝1000以上</SelectItem>
-                    <SelectItem value="大V账号或粉丝3000以上">大V账号或粉丝3000以上</SelectItem>
-                    <SelectItem value="粉丝5000以上">粉丝5000以上</SelectItem>
+                    {influenceOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -12,14 +12,21 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { mockDisposalTasks } from '../../data/mockData';
 import { HandleDisposalDialog } from './HandleDisposalDialog';
 import { TaskDetailDialog } from './TaskDetailDialog';
 import { CreateDisposalTask } from './CreateDisposalTask';
 import type { DisposalTask } from '../../types';
+import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
+import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
 
 export function DisposalTasks() {
-  const [tasks, setTasks] = useState<DisposalTask[]>(mockDisposalTasks);
+  const {
+    disposalTasks: tasks,
+    workflowConfigs,
+    createDisposalTask,
+    acceptDisposalTask,
+    submitDisposalForReview,
+  } = useTaskWorkflow();
   const [isHandleOpen, setIsHandleOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -30,32 +37,15 @@ export function DisposalTasks() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // 接收任务
-  const handleAcceptTask = (id: string) => {
-    setTasks(tasks.map(t =>
-      t.id === id ? { ...t, status: '已接收' } : t
-    ));
-  };
-
-  // 完结任务
-  const handleFinishTask = (id: string) => {
-    setTasks(tasks.map(t =>
-      t.id === id ? { ...t, status: '已完结' } : t
-    ));
-  };
-
-  // 提交处置
-  const handleDisposalSubmit = (details: string, attachment: string) => {
+  const handleDisposalSubmit = (details: string, attachment: string, completedAt: string, workflowConfigId: string) => {
     if (!currentTask) return;
-    setTasks(tasks.map(t =>
-      t.id === currentTask.id ? {
-        ...t,
-        status: '处置中',
-        measures: details,
-        progress: details,
-        evidence: attachment ? [attachment] : []
-      } : t
-    ));
+    submitDisposalForReview({
+      taskId: currentTask.id,
+      details,
+      attachment,
+      completedAt,
+      workflowConfigId,
+    });
   };
 
   const getStatusBadge = (status: DisposalTask['status']) => {
@@ -83,7 +73,11 @@ export function DisposalTasks() {
   };
 
   const filteredTasks = tasks.filter(task => {
-    if (searchKeyword && !task.sentimentTitle.toLowerCase().includes(searchKeyword.toLowerCase()) && !task.assignee.toLowerCase().includes(searchKeyword.toLowerCase())) {
+    if (
+      searchKeyword &&
+      !task.sentimentTitle.toLowerCase().includes(searchKeyword.toLowerCase()) &&
+      !getAssignmentDisplayName(task.assignmentTargets, task.assignee).toLowerCase().includes(searchKeyword.toLowerCase())
+    ) {
       return false;
     }
     // Simplistic date filtering (real implementation would parse Dates accurately)
@@ -111,7 +105,7 @@ export function DisposalTasks() {
             <div className="text-sm">
               <span className="text-gray-600">待处理：</span>
               <span className="font-semibold text-red-600">
-                {tasks.filter(t => t.status === '未接收' || t.status === '处置中').length}
+                {tasks.filter(t => ['未接收', '已接收', '处置中', '已完成'].includes(t.status)).length}
               </span>
             </div>
             <div className="text-sm">
@@ -191,10 +185,19 @@ export function DisposalTasks() {
             {filteredTasks.map((task) => (
               <TableRow key={task.id}>
                 <TableCell className="max-w-md">
-                  <div className="font-medium line-clamp-2">{task.sentimentTitle}</div>
+                  <button
+                    type="button"
+                    className="line-clamp-2 text-left font-medium text-blue-600 hover:underline"
+                    onClick={() => {
+                      setCurrentTask(task);
+                      setIsDetailOpen(true);
+                    }}
+                  >
+                    {task.sentimentTitle}
+                  </button>
                 </TableCell>
                 <TableCell>{getLevelBadge(task.level)}</TableCell>
-                <TableCell>{task.assignee}</TableCell>
+                <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
                 <TableCell>{getStatusBadge(task.status)}</TableCell>
                 <TableCell className="text-sm text-gray-600">
                   {task.createdAt}
@@ -210,7 +213,7 @@ export function DisposalTasks() {
                     }}>查看详情</Button>
 
                     {task.status === '未接收' && (
-                      <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => handleAcceptTask(task.id)}>
+                      <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => acceptDisposalTask(task.id)}>
                         接收
                       </Button>
                     )}
@@ -220,20 +223,12 @@ export function DisposalTasks() {
                         setCurrentTask(task);
                         setIsHandleOpen(true);
                       }}>
-                        处置
+                        执行
                       </Button>
                     )}
 
-                    {['已接收', '处置中'].includes(task.status) && (
-                      <Button variant="ghost" size="sm" className="text-green-600" onClick={() => handleFinishTask(task.id)}>
-                        完结
-                      </Button>
-                    )}
-
-                    {task.status === '已完成' && !task.reviewStatus && (
-                      <Button variant="ghost" size="sm" className="text-blue-600">
-                        审核
-                      </Button>
+                    {task.reviewStatus === '待审核' && (
+                      <span className="text-xs text-amber-600">审核中</span>
                     )}
                   </div>
                 </TableCell>
@@ -247,6 +242,7 @@ export function DisposalTasks() {
         open={isHandleOpen}
         onOpenChange={setIsHandleOpen}
         task={currentTask}
+        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'disposal' && item.enabled)}
         onSubmit={handleDisposalSubmit}
       />
 
@@ -258,7 +254,7 @@ export function DisposalTasks() {
       <CreateDisposalTask
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-        onSubmit={(newTask) => setTasks([newTask, ...tasks])}
+        onSubmit={createDisposalTask}
       />
     </div>
   );

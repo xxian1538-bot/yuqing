@@ -1,8 +1,9 @@
-import { mockCommentTasks, mockDisposalTasks } from '../data/mockData';
 import { useSentimentData } from '../context/SentimentDataContext';
+import { useTaskWorkflow } from '../context/TaskWorkflowContext';
 import { AlertCircle, Calendar, ClipboardList, MessageSquare, User } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
+import { getAssignmentDisplayName } from '../utils/assignmentTargets';
 
 interface SentimentProcessFlowProps {
   sentimentId: string;
@@ -10,16 +11,17 @@ interface SentimentProcessFlowProps {
 
 export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps) {
   const { sentiments } = useSentimentData();
+  const { disposalTasks, commentTasks } = useTaskWorkflow();
   const sentiment = sentiments.find((item) => item.id === sentimentId);
-  const disposalTasks = mockDisposalTasks.filter((task) => task.sentimentId === sentimentId);
-  const commentTasks = mockCommentTasks.filter((task) => task.sentimentId === sentimentId);
+  const relatedDisposalTasks = disposalTasks.filter((task) => task.sentimentId === sentimentId);
+  const relatedCommentTasks = commentTasks.filter((task) => task.sentimentId === sentimentId);
 
   if (!sentiment) {
     return <div className="text-sm text-gray-500">未找到关联舆情数据</div>;
   }
 
-  const branches = disposalTasks.map((disposalTask, index) => {
-    const relatedComments = mockCommentTasks.filter(
+  const branches = relatedDisposalTasks.map((disposalTask, index) => {
+    const relatedComments = commentTasks.filter(
       (commentTask) =>
         commentTask.disposalTaskId === disposalTask.id ||
         (commentTask.sentimentId === sentimentId && !commentTask.disposalTaskId && index === 0),
@@ -32,8 +34,8 @@ export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps)
   });
 
   const orphanCommentTasks =
-    disposalTasks.length === 0
-      ? commentTasks
+    relatedDisposalTasks.length === 0
+      ? relatedCommentTasks
       : [];
 
   return (
@@ -105,7 +107,7 @@ export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps)
                       <div className="mt-3 space-y-2 text-xs text-gray-500">
                         <div className="flex items-center gap-2">
                           <User className="h-3.5 w-3.5" />
-                          <span>负责人：{disposalTask.assignee}</span>
+                          <span>负责人：{getAssignmentDisplayName(disposalTask.assignmentTargets, disposalTask.assignee)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-3.5 w-3.5" />
@@ -143,7 +145,7 @@ export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps)
                             <div className="flex items-center justify-between text-gray-500">
                               <span className="flex items-center gap-2">
                                 <User className="h-3.5 w-3.5" />
-                                网评员：{commentTask.assignee}
+                                网评员：{getAssignmentDisplayName(commentTask.assignmentTargets, commentTask.assignee)}
                               </span>
                               <span>进度：{commentTask.submissions.length}/{commentTask.requirements.postCount}</span>
                             </div>
@@ -193,7 +195,7 @@ export function SentimentProcessFlow({ sentimentId }: SentimentProcessFlowProps)
                               <div className="flex items-center justify-between text-gray-500">
                                 <span className="flex items-center gap-2">
                                   <User className="h-3.5 w-3.5" />
-                                  网评员：{commentTask.assignee}
+                                  网评员：{getAssignmentDisplayName(commentTask.assignmentTargets, commentTask.assignee)}
                                 </span>
                                 <span>进度：{commentTask.submissions.length}/{commentTask.requirements.postCount}</span>
                               </div>

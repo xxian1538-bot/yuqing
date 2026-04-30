@@ -6,6 +6,7 @@ import {
   Bell,
   User,
   Settings,
+  ShieldCheck,
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
@@ -46,6 +47,16 @@ export function Layout() {
       subItems: [
         { path: '/disposal/tasks', label: '处置任务' },
         { path: '/comment-tasks/list', label: '网评任务' },
+      ]
+    },
+    {
+      path: '/audit',
+      label: '审核管理',
+      icon: ShieldCheck,
+      subItems: [
+        { path: '/audit/workflow', label: '工作流配置' },
+        { path: '/audit/pending', label: '待审核' },
+        { path: '/audit/my-requests', label: '我发起的' },
       ]
     },
     {

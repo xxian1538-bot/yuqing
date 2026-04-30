@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, CheckCircle, XCircle, Search, Calendar } from 'lucide-react';
+import { Plus, Search, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -12,34 +12,36 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
-import { mockCommentTasks } from '../../data/mockData';
 import { CreateCommentTask } from './CreateCommentTask';
 import { ExecuteCommentTaskDialog } from './ExecuteCommentTaskDialog';
+import { CommentTaskDetailDialog } from './CommentTaskDetailDialog';
 import type { CommentTask } from '../../types';
+import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
+import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
 
 export function CommentTaskList() {
-  const [tasks, setTasks] = useState<CommentTask[]>(mockCommentTasks);
+  const {
+    commentTasks: tasks,
+    workflowConfigs,
+    createCommentTask,
+    submitCommentExecution,
+  } = useTaskWorkflow();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [dateRange, setDateRange] = useState('全部');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [isExecuteOpen, setIsExecuteOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<CommentTask | null>(null);
 
-  const handleExecuteSubmit = (taskId: string, submission: any, isFinished: boolean) => {
-    setTasks(tasks.map(t => {
-      if (t.id === taskId) {
-        const updatedTask = { ...t, submissions: [...t.submissions, submission] };
-        if (isFinished) {
-          updatedTask.status = '已提交';
-        } else {
-          updatedTask.status = '进行中';
-        }
-        return updatedTask;
-      }
-      return t;
-    }));
+  const handleExecuteSubmit = (taskId: string, submission: any, isFinished: boolean, workflowConfigId?: string) => {
+    submitCommentExecution({
+      taskId,
+      submission,
+      submitForReview: isFinished,
+      workflowConfigId,
+    });
   };
 
   // 获取状态标签
@@ -55,7 +57,11 @@ export function CommentTaskList() {
   };
 
   const filteredTasks = tasks.filter(task => {
-    if (searchKeyword && !task.sentimentTitle.toLowerCase().includes(searchKeyword.toLowerCase()) && !task.assignee.toLowerCase().includes(searchKeyword.toLowerCase())) {
+    if (
+      searchKeyword &&
+      !task.sentimentTitle.toLowerCase().includes(searchKeyword.toLowerCase()) &&
+      !getAssignmentDisplayName(task.assignmentTargets, task.assignee).toLowerCase().includes(searchKeyword.toLowerCase())
+    ) {
       return false;
     }
     // Date filtering would go here based on task.createdAt
@@ -75,7 +81,6 @@ export function CommentTaskList() {
               <Plus className="w-4 h-4 mr-2" />
               发起网评任务
             </Button>
-            <Button variant="outline">批量审核</Button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -163,11 +168,20 @@ export function CommentTaskList() {
               <TableRow key={task.id}>
                 <TableCell>
                   <div className="space-y-1">
-                    <div className="font-medium line-clamp-2">{task.sentimentTitle}</div>
+                    <button
+                      type="button"
+                      className="line-clamp-2 text-left font-medium text-blue-600 hover:underline"
+                      onClick={() => {
+                        setCurrentTask(task);
+                        setIsDetailOpen(true);
+                      }}
+                    >
+                      {task.sentimentTitle}
+                    </button>
                     <div className="text-xs text-gray-500">目标：{task.goal}</div>
                   </div>
                 </TableCell>
-                <TableCell>{task.assignee}</TableCell>
+                <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
                 <TableCell>
                   <span className="font-medium">{task.requirements.postCount}</span> 条
                 </TableCell>
@@ -186,18 +200,18 @@ export function CommentTaskList() {
                         setIsExecuteOpen(true);
                       }}>执行</Button>
                     )}
-                    <Button variant="ghost" size="sm">查看详情</Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setCurrentTask(task);
+                        setIsDetailOpen(true);
+                      }}
+                    >
+                      查看详情
+                    </Button>
                     {task.status === '已提交' && (
-                      <>
-                        <Button variant="ghost" size="sm" className="text-green-600">
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          通过
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-red-600">
-                          <XCircle className="w-4 h-4 mr-1" />
-                          退回
-                        </Button>
-                      </>
+                      <span className="text-xs text-amber-600">待审核</span>
                     )}
                   </div>
                 </TableCell>
@@ -210,14 +224,21 @@ export function CommentTaskList() {
       <CreateCommentTask
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-        onSubmit={(newTask) => setTasks([newTask, ...tasks])}
+        onSubmit={createCommentTask}
       />
 
       <ExecuteCommentTaskDialog
         open={isExecuteOpen}
         onOpenChange={setIsExecuteOpen}
         task={currentTask}
+        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'comment' && item.enabled)}
         onSubmit={handleExecuteSubmit}
+      />
+
+      <CommentTaskDetailDialog
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
+        task={currentTask}
       />
     </div>
   );

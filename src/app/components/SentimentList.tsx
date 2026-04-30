@@ -33,12 +33,16 @@ import { ManualEntryForm } from './ManualEntryForm';
 import { ReportDialog } from './ReportDialog';
 import { AssignDialog } from './AssignDialog';
 import { SentimentEditDialog } from './SentimentEditDialog';
+import { SentimentClosureDialog } from './SentimentClosureDialog';
+import { SentimentPickerDialog } from './SentimentPickerDialog';
 import type { SentimentInfo, SentimentStatus, EmotionTrend } from '../types';
 import { getAssociationGroupIds } from '../utils/sentimentAssociations';
 import { useSentimentData } from '../context/SentimentDataContext';
+import { useTaskWorkflow } from '../context/TaskWorkflowContext';
 
 export function SentimentList() {
-  const { sentiments, addSentiment, updateSentiment, updateSentimentStatus, associateEvents } = useSentimentData();
+  const { sentiments, addSentiment, updateSentiment, associateEvents } = useSentimentData();
+  const { getSentimentTaskStatusById, confirmSentimentClosure } = useTaskWorkflow();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<SentimentStatus | '全部'>('全部');
@@ -53,7 +57,11 @@ export function SentimentList() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isClosureOpen, setIsClosureOpen] = useState(false);
+  const [isSingleAssociateOpen, setIsSingleAssociateOpen] = useState(false);
   const [currentSentiment, setCurrentSentiment] = useState<SentimentInfo | null>(null);
+  const [reportSentimentIds, setReportSentimentIds] = useState<string[]>([]);
+  const [assignSentimentIds, setAssignSentimentIds] = useState<string[]>([]);
 
   const pageSize = 20;
   const associationGroupIds = getAssociationGroupIds(sentiments, selectedIds);
@@ -118,6 +126,29 @@ export function SentimentList() {
     setIsAssociateOpen(false);
   };
 
+  const openBatchReport = () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    setReportSentimentIds(selectedIds);
+    setCurrentSentiment(null);
+    setIsReportOpen(true);
+  };
+
+  const openBatchAssign = () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    setAssignSentimentIds(selectedIds);
+    setCurrentSentiment(null);
+    setIsAssignOpen(true);
+  };
+
+  const openSingleAssociateDialog = (sentiment: SentimentInfo) => {
+    setCurrentSentiment(sentiment);
+    setIsSingleAssociateOpen(true);
+  };
+
   // 获取状态标签样式
   const getStatusBadge = (status: SentimentStatus) => {
     const styles = {
@@ -147,6 +178,18 @@ export function SentimentList() {
     );
   };
 
+  const getTaskStatusBadge = (sentimentId: string) => {
+    const taskStatus = getSentimentTaskStatusById(sentimentId);
+    const styles = {
+      待指派: 'bg-gray-100 text-gray-700',
+      处置中: 'bg-blue-100 text-blue-700',
+      待完结: 'bg-amber-100 text-amber-700',
+      已完结: 'bg-green-100 text-green-700',
+    };
+
+    return <Badge className={styles[taskStatus]}>{taskStatus}</Badge>;
+  };
+
   return (
     <div className="p-6">
       {/* 页面标题 */}
@@ -166,11 +209,11 @@ export function SentimentList() {
             <Download className="w-4 h-4 mr-2" />
             导出
           </Button>
-          <Button variant="outline" disabled={selectedIds.length === 0}>
+          <Button variant="outline" disabled={selectedIds.length === 0} onClick={openBatchReport}>
             <Send className="w-4 h-4 mr-2" />
             批量报送
           </Button>
-          <Button variant="outline" disabled={selectedIds.length === 0}>
+          <Button variant="outline" disabled={selectedIds.length === 0} onClick={openBatchAssign}>
             <UserPlus className="w-4 h-4 mr-2" />
             批量指派
           </Button>
@@ -283,6 +326,7 @@ export function SentimentList() {
               <TableHead className="min-w-[150px] max-w-[200px]">标题</TableHead>
               <TableHead className="min-w-[80px]">事件等级</TableHead>
               <TableHead className="min-w-[80px]">报送状态</TableHead>
+              <TableHead className="min-w-[80px]">任务状态</TableHead>
               <TableHead className="min-w-[100px]">时间</TableHead>
               <TableHead className="min-w-[80px]">来源平台</TableHead>
               <TableHead className="min-w-[150px] max-w-[250px]">内容</TableHead>
@@ -333,6 +377,7 @@ export function SentimentList() {
                     {sentiment.status === "已报送" ? "已报送" : "未报送"}
                   </Badge>
                 </TableCell>
+                <TableCell>{getTaskStatusBadge(sentiment.id)}</TableCell>
                 <TableCell>
                   <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.publishTime}</div>
                 </TableCell>
@@ -373,6 +418,7 @@ export function SentimentList() {
                       size="sm"
                       onClick={() => {
                         setCurrentSentiment(sentiment);
+                        setReportSentimentIds([sentiment.id]);
                         setIsReportOpen(true);
                       }}
                     >
@@ -384,15 +430,44 @@ export function SentimentList() {
                       size="sm"
                       onClick={() => {
                         setCurrentSentiment(sentiment);
+                        setAssignSentimentIds([sentiment.id]);
                         setIsAssignOpen(true);
                       }}
                     >
                       <UserPlus className="w-4 h-4 mr-1" />
                       指派
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-green-600">
-                      完结
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openSingleAssociateDialog(sentiment)}
+                    >
+                      <Link2 className="w-4 h-4 mr-1" />
+                      关联
                     </Button>
+                    {sentiment.status !== '已办结' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-green-600"
+                        onClick={() => confirmSentimentClosure(sentiment.id, '列表手动完结')}
+                      >
+                        手动完结
+                      </Button>
+                    ) : null}
+                    {getSentimentTaskStatusById(sentiment.id) === '待完结' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-green-600"
+                        onClick={() => {
+                          setCurrentSentiment(sentiment);
+                          setIsClosureOpen(true);
+                        }}
+                      >
+                        完结
+                      </Button>
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
@@ -455,10 +530,10 @@ export function SentimentList() {
             summary: data.summary || '',
             channel: data.source || '未知',
             readCount: data.readCount || 0,
-            commentCount: 0,
-            likeCount: 0,
-            shareCount: 0,
-            collectCount: 0,
+            commentCount: data.commentCount || 0,
+            likeCount: data.likeCount || 0,
+            shareCount: data.shareCount || 0,
+            collectCount: data.collectCount || 0,
             emotionTrend: '中性',
             level: data.level || '轻微',
             status: '未处理',
@@ -476,10 +551,10 @@ export function SentimentList() {
       <ReportDialog
         open={isReportOpen}
         onOpenChange={setIsReportOpen}
-        sentimentId={currentSentiment?.id || ""}
-        onSuccess={() => {
-          if (currentSentiment) {
-            updateSentimentStatus(currentSentiment.id, '已报送');
+        sentimentIds={reportSentimentIds}
+        onSuccess={(sentimentIds) => {
+          if (reportSentimentIds.length > 1) {
+            setSelectedIds([]);
           }
         }}
       />
@@ -487,7 +562,7 @@ export function SentimentList() {
       <AssignDialog
         open={isAssignOpen}
         onOpenChange={setIsAssignOpen}
-        sentimentId={currentSentiment?.id || ""}
+        sentimentIds={assignSentimentIds}
         sentimentLevel={currentSentiment?.level || "一般"}
       />
 
@@ -502,8 +577,19 @@ export function SentimentList() {
         }}
       />
 
+      <SentimentClosureDialog
+        open={isClosureOpen}
+        onOpenChange={setIsClosureOpen}
+        sentimentTitle={currentSentiment?.title || ''}
+        onConfirm={(note) => {
+          if (currentSentiment) {
+            confirmSentimentClosure(currentSentiment.id, note);
+          }
+        }}
+      />
+
       <Dialog open={isAssociateOpen} onOpenChange={setIsAssociateOpen}>
-        <DialogContent className="sm:max-w-[84rem]">
+        <DialogContent className="sm:max-w-[84rem] bg-white">
           <DialogHeader>
             <DialogTitle>手动关联舆情事件</DialogTitle>
             <DialogDescription>
@@ -539,6 +625,23 @@ export function SentimentList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SentimentPickerDialog
+        open={isSingleAssociateOpen}
+        onOpenChange={setIsSingleAssociateOpen}
+        sentiments={sentiments.filter((item) => item.id !== currentSentiment?.id)}
+        title={currentSentiment ? `为“${currentSentiment.title}”选择关联舆情` : '选择关联舆情'}
+        onConfirm={(selectedSentiment) => {
+          if (!currentSentiment || !selectedSentiment) {
+            return;
+          }
+
+          associateEvents(
+            [currentSentiment.id, selectedSentiment.id],
+            currentSentiment.primaryEventId || currentSentiment.id,
+          );
+        }}
+      />
     </div>
   );
 }

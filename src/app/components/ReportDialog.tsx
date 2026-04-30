@@ -4,18 +4,21 @@ import { Button } from "\./ui/button";
 import { Label } from "\./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "\./ui/select";
 import { Textarea } from "./ui/textarea";
+import { useSentimentData } from "../context/SentimentDataContext";
 
 interface ReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sentimentId: string;
-  onSuccess?: () => void;
+  sentimentIds: string[];
+  onSuccess?: (sentimentIds: string[]) => void;
 }
 
-export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: ReportDialogProps) {
+export function ReportDialog({ open, onOpenChange, sentimentIds, onSuccess }: ReportDialogProps) {
+  const { reportSentiments } = useSentimentData();
   const [targetType, setTargetType] = useState("person");
   const [target, setTarget] = useState("");
   const [reportNote, setReportNote] = useState("");
+  const isBatch = sentimentIds.length > 1;
 
   const handleSubmit = () => {
     if (!target) {
@@ -23,11 +26,15 @@ export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: Rep
       return;
     }
 
-    alert(`报送成功\n关联舆情: ${sentimentId}\n报送目标: ${target}\n报送说明: ${reportNote || "无"}`);
-    
-    // 调用成功回调以更新列表状态
+    reportSentiments({
+      sentimentIds,
+      targetType,
+      target,
+      reportNote,
+    });
+
     if (onSuccess) {
-      onSuccess();
+      onSuccess(sentimentIds);
     }
     
     onOpenChange(false);
@@ -45,9 +52,12 @@ export function ReportDialog({ open, onOpenChange, sentimentId, onSuccess }: Rep
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[42rem] bg-white">
         <DialogHeader>
-          <DialogTitle>舆情报送</DialogTitle>
+          <DialogTitle>{isBatch ? '批量舆情报送' : '舆情报送'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600">
+            {isBatch ? `当前已选择 ${sentimentIds.length} 条舆情进行统一报送。` : `当前报送舆情编号：${sentimentIds[0] || '-'}`}
+          </div>
           <div className="space-y-2">
             <Label>报送目标类型</Label>
             <Select value={targetType} onValueChange={(val) => { setTargetType(val); setTarget(""); }}>

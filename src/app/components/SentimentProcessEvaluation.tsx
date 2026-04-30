@@ -1,7 +1,8 @@
-import { mockDisposalTasks, mockCommentTasks } from '../data/mockData';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { CheckCircle2, Clock, Calendar, Route, AlertCircle, ClipboardList, MessageSquare, User } from 'lucide-react';
 import { useSentimentData } from '../context/SentimentDataContext';
+import { useTaskWorkflow } from '../context/TaskWorkflowContext';
+import { getAssignmentDisplayName } from '../utils/assignmentTargets';
 
 interface SentimentProcessEvaluationProps {
   sentimentId: string;
@@ -9,22 +10,23 @@ interface SentimentProcessEvaluationProps {
 
 export function SentimentProcessEvaluation({ sentimentId }: SentimentProcessEvaluationProps) {
   const { sentiments } = useSentimentData();
+  const { disposalTasks, commentTasks } = useTaskWorkflow();
   const sentiment = sentiments.find((s) => s.id === sentimentId);
-  const disposalTasks = mockDisposalTasks.filter((t) => t.sentimentId === sentimentId);
-  const commentTasks = mockCommentTasks.filter((t) => t.sentimentId === sentimentId);
+  const relatedDisposalTasks = disposalTasks.filter((t) => t.sentimentId === sentimentId);
+  const relatedCommentTasks = commentTasks.filter((t) => t.sentimentId === sentimentId);
 
   if (!sentiment) {
     return <div className="text-sm text-gray-500">未找到关联舆情数据</div>;
   }
 
   const eventStartTime = new Date(sentiment.publishTime);
-  const firstDisposalTask = [...disposalTasks].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
-  const allTaskUpdateTimes = [...disposalTasks, ...commentTasks]
+  const firstDisposalTask = [...relatedDisposalTasks].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+  const allTaskUpdateTimes = [...relatedDisposalTasks, ...relatedCommentTasks]
     .map((task) => new Date(task.updatedAt).getTime())
     .filter((time) => !Number.isNaN(time));
   const eventEndTime = allTaskUpdateTimes.length > 0 ? new Date(Math.max(...allTaskUpdateTimes)) : null;
-  const totalTaskCount = disposalTasks.length + commentTasks.length;
-  const latestResult = [...disposalTasks]
+  const totalTaskCount = relatedDisposalTasks.length + relatedCommentTasks.length;
+  const latestResult = [...relatedDisposalTasks]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .find((task) => task.result || task.progress);
 
@@ -58,21 +60,21 @@ export function SentimentProcessEvaluation({ sentimentId }: SentimentProcessEval
     ...(firstDisposalTask ? [{
       title: '介入处理',
       time: firstDisposalTask.createdAt,
-      description: `${firstDisposalTask.assignee}介入处理，流转耗时：${formatDuration(eventStartTime, new Date(firstDisposalTask.createdAt))}`,
+      description: `${getAssignmentDisplayName(firstDisposalTask.assignmentTargets, firstDisposalTask.assignee)}介入处理，流转耗时：${formatDuration(eventStartTime, new Date(firstDisposalTask.createdAt))}`,
       icon: User,
       color: 'bg-blue-500',
     }] : []),
-    ...disposalTasks.map((task) => ({
+    ...relatedDisposalTasks.map((task) => ({
       title: '处置任务执行',
       time: task.updatedAt,
-      description: `${task.assignee}：${task.result || task.progress || task.measures}`,
+      description: `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)}：${task.result || task.progress || task.measures}`,
       icon: ClipboardList,
       color: task.status === '已完成' || task.status === '已完结' ? 'bg-green-500' : 'bg-blue-500',
     })),
-    ...commentTasks.map((task) => ({
+    ...relatedCommentTasks.map((task) => ({
       title: '网评任务执行',
       time: task.updatedAt,
-      description: `${task.assignee}完成 ${task.submissions.length}/${task.requirements.postCount} 条提交，状态：${task.status}`,
+      description: `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)}完成 ${task.submissions.length}/${task.requirements.postCount} 条提交，状态：${task.status}`,
       icon: MessageSquare,
       color: task.status === '已审核' ? 'bg-green-500' : 'bg-emerald-500',
     })),
@@ -106,7 +108,7 @@ export function SentimentProcessEvaluation({ sentimentId }: SentimentProcessEval
             <div className="text-sm font-semibold text-gray-900">
               {firstDisposalTask ? formatDuration(eventStartTime, new Date(firstDisposalTask.createdAt)) : '暂无任务'}
             </div>
-            {firstDisposalTask && <div className="mt-1 text-xs text-gray-500">由 {firstDisposalTask.assignee} 介入</div>}
+            {firstDisposalTask && <div className="mt-1 text-xs text-gray-500">由 {getAssignmentDisplayName(firstDisposalTask.assignmentTargets, firstDisposalTask.assignee)} 介入</div>}
           </CardContent>
         </Card>
         <Card>
@@ -116,7 +118,7 @@ export function SentimentProcessEvaluation({ sentimentId }: SentimentProcessEval
               任务总数
             </div>
             <div className="text-sm font-semibold text-gray-900">{totalTaskCount} 个</div>
-            <div className="mt-1 text-xs text-gray-500">处置 {disposalTasks.length} 个，网评 {commentTasks.length} 个</div>
+            <div className="mt-1 text-xs text-gray-500">处置 {relatedDisposalTasks.length} 个，网评 {relatedCommentTasks.length} 个</div>
           </CardContent>
         </Card>
         <Card>

@@ -1,15 +1,7 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { defaultScoringWeights } from '../data/scoringConfig';
+import { appApi } from '../lib/api';
 import type { ScoringWeights } from '../types';
-
-const defaultWeights: ScoringWeights = {
-  topicWeight: 10,
-  attentionWeight: 15,
-  emotionWeight: 15,
-  mediaWeight: 20,
-  formatWeight: 10,
-  channelWeight: 10,
-  influenceWeight: 20,
-};
 
 interface ScoringConfigContextValue {
   weights: ScoringWeights;
@@ -19,10 +11,32 @@ interface ScoringConfigContextValue {
 const ScoringConfigContext = createContext<ScoringConfigContextValue | null>(null);
 
 export function ScoringConfigProvider({ children }: { children: ReactNode }) {
-  const [weights, setWeights] = useState<ScoringWeights>(defaultWeights);
+  const [weights, setWeights] = useState<ScoringWeights>(defaultScoringWeights);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const nextWeights = await appApi.getScoringWeights();
+        setWeights(nextWeights);
+      } catch (error) {
+        console.error('Failed to load scoring weights', error);
+      }
+    })();
+  }, []);
+
+  const updateWeights = (nextWeights: ScoringWeights) => {
+    void (async () => {
+      try {
+        await appApi.updateScoringWeights(nextWeights);
+        setWeights(nextWeights);
+      } catch (error) {
+        console.error('Failed to update scoring weights', error);
+      }
+    })();
+  };
 
   return (
-    <ScoringConfigContext.Provider value={{ weights, updateWeights: setWeights }}>
+    <ScoringConfigContext.Provider value={{ weights, updateWeights }}>
       {children}
     </ScoringConfigContext.Provider>
   );

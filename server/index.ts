@@ -1,0 +1,704 @@
+import { createServer } from 'node:http';
+import { URL } from 'node:url';
+import { deleteRecord, ensureSchema, upsertMany, upsertRecord } from './db';
+import { loadAppState, seedStateIfEmpty } from './state';
+import { associateSentiments } from '../src/app/utils/sentimentAssociations';
+import type {
+  CommentTask,
+  DisposalTask,
+  ReportRecord,
+  ReviewRequest,
+  ScoringWeights,
+  SentimentClosureRecord,
+  SentimentInfo,
+  SentimentStatus,
+  WorkflowConfig,
+  WorkflowScene,
+} from '../src/app/types';
+
+const API_PORT = Number(process.env.API_PORT || 3001);
+const CURRENT_USER = '舆情管理员';
+
+function nowString() {
+  return new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+}
+
+function json(response: import('node:http').ServerResponse, status: number, payload: unknown) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+  });
+  response.end(JSON.stringify(payload));
+}
+
+async function readBody(request: import('node:http').IncomingMessage) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function notFound(response: import('node:http').ServerResponse) {
+  json(response, 404, { message: 'Not found' });
+}
+
+function error(response: import('node:http').ServerResponse, reason: unknown) {
+  const message = reason instanceof Error ? reason.message : 'Unknown error';
+  json(response, 500, { message });
+}
+
+async function persistSentiments(sentiments: SentimentInfo[]) {
+  await upsertMany('sentiments', sentiments.map((item) => ({ id: item.id, data: item })));
+}
+
+async function persistDisposalTasks(tasks: DisposalTask[]) {
+  await upsertMany('disposal_tasks', tasks.map((item) => ({ id: item.id, data: item })));
+}
+
+async function persistCommentTasks(tasks: CommentTask[]) {
+  await upsertMany('comment_tasks', tasks.map((item) => ({ id: item.id, data: item })));
+}
+
+async function persistReviewRequests(items: ReviewRequest[]) {
+  await upsertMany('review_requests', items.map((item) => ({ id: item.id, data: item })));
+}
+
+async function persistWorkflowConfigs(items: WorkflowConfig[]) {
+  await upsertMany('workflow_configs', items.map((item) => ({ id: item.id, data: item })));
+}
+
+async function persistClosureRecord(record: SentimentClosureRecord) {
+  await upsertRecord('closure_records', record.sentimentId, record);
+}
+
+async function maybePromoteSentiment(sentimentId: string, nextStatus: SentimentStatus = '跟进中') {
+  const state = await loadAppState();
+  const target = state.sentiments.find((item) => item.id === sentimentId);
+  if (!target || target.status !== '未处理') {
+    return;
+  }
+
+  await upsertRecord('sentiments', target.id, { ...target, status: nextStatus });
+}
+
+async function handleGetSentiments(response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  json(response, 200, state.sentiments);
+}
+
+async function handleGetTaskWorkflow(response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  json(response, 200, {
+    disposalTasks: state.disposalTasks,
+    commentTasks: state.commentTasks,
+    reviewRequests: state.reviewRequests,
+    closureRecords: state.closureRecords,
+    workflowConfigs: state.workflowConfigs,
+  });
+}
+
+async function handleGetScoringConfig(response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  json(response, 200, state.scoringWeights);
+}
+
+async function handleAddSentiment(body: any, response: import('node:http').ServerResponse) {
+  const sentiment = body.sentiment as SentimentInfo;
+  await upsertRecord('sentiments', sentiment.id, sentiment);
+  json(response, 200, { ok: true });
+}
+
+async function handleUpdateSentiment(sentimentId: string, body: any, response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  const current = state.sentiments.find((item) => item.id === sentimentId);
+  if (!current) {
+    return notFound(response);
+  }
+
+  await upsertRecord('sentiments', sentimentId, {
+    ...current,
+    ...body.updates,
+  });
+  json(response, 200, { ok: true });
+}
+
+async function handleUpdateSentimentStatus(body: any, response: import('node:http').ServerResponse) {
+  const { sentimentId, status } = body as { sentimentId: string; status: SentimentStatus };
+  const state = await loadAppState();
+  const current = state.sentiments.find((item) => item.id === sentimentId);
+  if (!current) {
+    return notFound(response);
+  }
+
+  await upsertRecord('sentiments', sentimentId, { ...current, status });
+  json(response, 200, { ok: true });
+}
+
+async function handleAssociateEvents(body: any, response: import('node:http').ServerResponse) {
+  const { selectedIds, primaryEventId } = body as { selectedIds: string[]; primaryEventId: string };
+  const state = await loadAppState();
+  const updated = associateSentiments(state.sentiments, selectedIds, primaryEventId);
+  await persistSentiments(updated);
+  json(response, 200, { ok: true });
+}
+
+async function handleReportSentiments(body: any, response: import('node:http').ServerResponse) {
+  const { sentimentIds, target, reportNote } = body as { sentimentIds: string[]; target: string; reportNote: string };
+  const state = await loadAppState();
+  const sentiments = state.sentiments.map((item) => (
+    sentimentIds.includes(item.id) ? { ...item, status: '已报送' as SentimentStatus } : item
+  ));
+
+  const records: ReportRecord[] = sentimentIds.map((sentimentId, index) => {
+    const sentiment = state.sentiments.find((item) => item.id === sentimentId);
+    return {
+      id: `report-${Date.now()}-${index}`,
+      sentimentId,
+      sentimentTitle: sentiment?.title || sentimentId,
+      targets: [target],
+      methods: ['系统消息'],
+      sentTime: nowString(),
+      status: reportNote ? '已查看' : '已接收',
+    };
+  });
+
+  await Promise.all([
+    persistSentiments(sentiments),
+    upsertMany('report_records', records.map((item) => ({ id: item.id, data: item }))),
+  ]);
+
+  json(response, 200, { ok: true });
+}
+
+async function handleAssignTask(body: any, response: import('node:http').ServerResponse) {
+  const payload = body as {
+    sentimentId: string;
+    sentimentTitle: string;
+    sentimentLevel: DisposalTask['level'];
+    taskType: 'disposal' | 'comment';
+    deadline: string;
+    assigneeLabel: string;
+    assignmentTargets: string[];
+    referenceEventIds: string[];
+    measures?: string;
+    postCount?: number;
+    platforms?: string[];
+    contentDirection?: string;
+  };
+
+  if (payload.taskType === 'disposal') {
+    const task: DisposalTask = {
+      id: `disposal-${Date.now()}`,
+      sentimentId: payload.sentimentId,
+      sentimentTitle: payload.sentimentTitle,
+      level: payload.sentimentLevel,
+      assignee: payload.assigneeLabel,
+      deadline: payload.deadline,
+      status: '未接收',
+      progress: '任务已下发，等待接收',
+      measures: payload.measures || '',
+      evidence: [],
+      result: '',
+      assignmentTargets: payload.assignmentTargets,
+      referenceEventIds: payload.referenceEventIds,
+      createdAt: nowString(),
+      updatedAt: nowString(),
+    };
+    await upsertRecord('disposal_tasks', task.id, task);
+  } else {
+    const task: CommentTask = {
+      id: `comment-${Date.now()}`,
+      sentimentId: payload.sentimentId,
+      sentimentTitle: payload.sentimentTitle,
+      goal: payload.contentDirection || '配合当前舆情处置开展舆论引导',
+      requirements: {
+        postCount: payload.postCount || 1,
+        platforms: payload.platforms || [],
+        contentDirection: payload.contentDirection || '',
+        deadline: payload.deadline,
+      },
+      assignee: payload.assigneeLabel,
+      status: '未开始',
+      submissions: [],
+      assignmentTargets: payload.assignmentTargets,
+      referenceEventIds: payload.referenceEventIds,
+      createdAt: nowString(),
+      updatedAt: nowString(),
+    };
+    await upsertRecord('comment_tasks', task.id, task);
+  }
+
+  await maybePromoteSentiment(payload.sentimentId);
+  json(response, 200, { ok: true });
+}
+
+async function handleCreateDisposalTask(body: any, response: import('node:http').ServerResponse) {
+  const task = body.task as DisposalTask;
+  await upsertRecord('disposal_tasks', task.id, task);
+  await maybePromoteSentiment(task.sentimentId);
+  json(response, 200, { ok: true });
+}
+
+async function handleCreateCommentTask(body: any, response: import('node:http').ServerResponse) {
+  const task = body.task as CommentTask;
+  await upsertRecord('comment_tasks', task.id, task);
+  await maybePromoteSentiment(task.sentimentId);
+  json(response, 200, { ok: true });
+}
+
+async function handleAcceptDisposalTask(body: any, response: import('node:http').ServerResponse) {
+  const { taskId } = body as { taskId: string };
+  const state = await loadAppState();
+  const tasks = state.disposalTasks.map((task) => (
+    task.id === taskId
+      ? { ...task, status: '已接收' as const, progress: '已接收任务，开始处置', updatedAt: nowString() }
+      : task
+  ));
+  await persistDisposalTasks(tasks);
+  json(response, 200, { ok: true });
+}
+
+async function handleSubmitDisposalReview(body: any, response: import('node:http').ServerResponse) {
+  const { taskId, details, attachment, completedAt, workflowConfigId } = body as {
+    taskId: string;
+    details: string;
+    attachment: string;
+    completedAt: string;
+    workflowConfigId: string;
+  };
+  const state = await loadAppState();
+  const workflow = state.workflowConfigs.find((item) => item.id === workflowConfigId);
+  if (!workflow) {
+    return json(response, 400, { message: '未找到审核流配置' });
+  }
+
+  const task = state.disposalTasks.find((item) => item.id === taskId);
+  if (!task) {
+    return notFound(response);
+  }
+
+  const review: ReviewRequest = {
+    id: `review-${Date.now()}`,
+    taskType: 'disposal',
+    taskId: task.id,
+    sentimentId: task.sentimentId,
+    sentimentTitle: task.sentimentTitle,
+    workflowConfigId: workflow.id,
+    workflowConfigName: workflow.name,
+    requester: CURRENT_USER,
+    summary: details,
+    status: '待审核',
+    submittedAt: nowString(),
+  };
+
+  const tasks = state.disposalTasks.map((item) => (
+    item.id === taskId
+      ? {
+          ...item,
+          status: '已完成' as const,
+          progress: details,
+          result: details,
+          evidence: attachment ? [attachment] : item.evidence,
+          completedAt: completedAt || item.completedAt || nowString(),
+          reviewStatus: '待审核' as const,
+          reviewWorkflowId: workflow.id,
+          reviewWorkflowName: workflow.name,
+          updatedAt: nowString(),
+        }
+      : item
+  ));
+
+  await Promise.all([
+    persistDisposalTasks(tasks),
+    upsertRecord('review_requests', review.id, review),
+  ]);
+
+  json(response, 200, { ok: true });
+}
+
+async function handleSubmitComment(body: any, response: import('node:http').ServerResponse) {
+  const { taskId, submission, submitForReview, workflowConfigId } = body as {
+    taskId: string;
+    submission: CommentTask['submissions'][number];
+    submitForReview: boolean;
+    workflowConfigId?: string;
+  };
+
+  const state = await loadAppState();
+  const task = state.commentTasks.find((item) => item.id === taskId);
+  if (!task) {
+    return notFound(response);
+  }
+
+  const nextSubmission = {
+    ...submission,
+    id: submission.id || `submission-${Date.now()}`,
+  };
+
+  let review: ReviewRequest | null = null;
+
+  const tasks = state.commentTasks.map((item) => {
+    if (item.id !== taskId) {
+      return item;
+    }
+
+    const nextTask: CommentTask = {
+      ...item,
+      submissions: [...item.submissions, nextSubmission],
+      updatedAt: nowString(),
+    };
+
+    if (!submitForReview) {
+      nextTask.status = '进行中';
+      return nextTask;
+    }
+
+    if (!workflowConfigId) {
+      return nextTask;
+    }
+
+    const workflow = state.workflowConfigs.find((config) => config.id === workflowConfigId);
+    if (!workflow) {
+      throw new Error('未找到审核流配置');
+    }
+
+    review = {
+      id: `review-${Date.now()}`,
+      taskType: 'comment',
+      taskId: item.id,
+      sentimentId: item.sentimentId,
+      sentimentTitle: item.sentimentTitle,
+      workflowConfigId: workflow.id,
+      workflowConfigName: workflow.name,
+      requester: CURRENT_USER,
+      summary: nextSubmission.summary || nextSubmission.content || '已提交执行材料，申请审核。',
+      status: '待审核',
+      submittedAt: nowString(),
+    };
+
+    nextTask.status = '已提交';
+    nextTask.reviewWorkflowId = workflow.id;
+    nextTask.reviewWorkflowName = workflow.name;
+    return nextTask;
+  });
+
+  await persistCommentTasks(tasks);
+  if (review) {
+    await upsertRecord('review_requests', review.id, review);
+  }
+  json(response, 200, { ok: true });
+}
+
+async function handleApproveReview(body: any, response: import('node:http').ServerResponse) {
+  const { reviewId, comment } = body as { reviewId: string; comment: string };
+  const state = await loadAppState();
+  const review = state.reviewRequests.find((item) => item.id === reviewId);
+  if (!review) {
+    return notFound(response);
+  }
+
+  const reviewRequests = state.reviewRequests.map((item) => (
+    item.id === reviewId
+      ? { ...item, status: '审核通过' as const, comment, reviewer: '审核员', reviewedAt: nowString() }
+      : item
+  ));
+
+  await persistReviewRequests(reviewRequests);
+
+  if (review.taskType === 'disposal') {
+    const tasks = state.disposalTasks.map((item) => (
+      item.id === review.taskId
+        ? {
+            ...item,
+            status: '已完结' as const,
+            reviewStatus: '审核通过' as const,
+            reviewComment: comment,
+            updatedAt: nowString(),
+          }
+        : item
+    ));
+    await persistDisposalTasks(tasks);
+  } else {
+    const tasks = state.commentTasks.map((item) => (
+      item.id === review.taskId
+        ? {
+            ...item,
+            status: '已审核' as const,
+            reviewComment: comment,
+            updatedAt: nowString(),
+          }
+        : item
+    ));
+    await persistCommentTasks(tasks);
+  }
+
+  json(response, 200, { ok: true });
+}
+
+async function handleRejectReview(body: any, response: import('node:http').ServerResponse) {
+  const { reviewId, comment } = body as { reviewId: string; comment: string };
+  const state = await loadAppState();
+  const review = state.reviewRequests.find((item) => item.id === reviewId);
+  if (!review) {
+    return notFound(response);
+  }
+
+  const reviewRequests = state.reviewRequests.map((item) => (
+    item.id === reviewId
+      ? { ...item, status: '审核不通过' as const, comment, reviewer: '审核员', reviewedAt: nowString() }
+      : item
+  ));
+
+  await persistReviewRequests(reviewRequests);
+
+  if (review.taskType === 'disposal') {
+    const tasks = state.disposalTasks.map((item) => (
+      item.id === review.taskId
+        ? {
+            ...item,
+            status: '处置中' as const,
+            reviewStatus: '审核不通过' as const,
+            reviewComment: comment,
+            updatedAt: nowString(),
+          }
+        : item
+    ));
+    await persistDisposalTasks(tasks);
+  } else {
+    const tasks = state.commentTasks.map((item) => (
+      item.id === review.taskId
+        ? {
+            ...item,
+            status: '未通过' as const,
+            reviewComment: comment,
+            updatedAt: nowString(),
+          }
+        : item
+    ));
+    await persistCommentTasks(tasks);
+  }
+
+  json(response, 200, { ok: true });
+}
+
+async function handleUpdateWorkflow(workflowId: string, body: any, response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  const target = state.workflowConfigs.find((item) => item.id === workflowId);
+  if (!target) {
+    return notFound(response);
+  }
+
+  const nextWorkflow = { ...target, ...body.updates, updatedAt: nowString() };
+  const workflows = state.workflowConfigs.map((item) => {
+    if (item.id === workflowId) {
+      return nextWorkflow;
+    }
+
+    if (nextWorkflow.isDefault && item.scene === nextWorkflow.scene) {
+      return { ...item, isDefault: false };
+    }
+
+    return item;
+  });
+  await persistWorkflowConfigs(workflows);
+  json(response, 200, { ok: true });
+}
+
+async function handleCreateWorkflow(body: any, response: import('node:http').ServerResponse) {
+  const workflow = body.workflow as WorkflowConfig;
+  const state = await loadAppState();
+  const workflows = state.workflowConfigs.map((item) => (
+    workflow.isDefault && item.scene === workflow.scene ? { ...item, isDefault: false } : item
+  ));
+  workflows.unshift({ ...workflow, updatedAt: workflow.updatedAt || nowString() });
+  await persistWorkflowConfigs(workflows);
+  json(response, 200, { ok: true });
+}
+
+async function handleDeleteWorkflow(workflowId: string, response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  const target = state.workflowConfigs.find((item) => item.id === workflowId);
+  if (!target) {
+    return notFound(response);
+  }
+
+  const next = state.workflowConfigs.filter((item) => item.id !== workflowId);
+  if (target.isDefault && next.some((item) => item.scene === target.scene)) {
+    const fallbackId = next.find((item) => item.scene === target.scene)?.id;
+    if (fallbackId) {
+      for (let index = 0; index < next.length; index += 1) {
+        if (next[index].id === fallbackId) {
+          next[index] = { ...next[index], isDefault: true, updatedAt: nowString() };
+          break;
+        }
+      }
+    }
+  }
+
+  await deleteRecord('workflow_configs', workflowId);
+  await persistWorkflowConfigs(next);
+  json(response, 200, { ok: true });
+}
+
+async function handleSetDefaultWorkflow(workflowId: string, scene: WorkflowScene, response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  const workflows = state.workflowConfigs.map((item) => {
+    if (item.scene !== scene) {
+      return item;
+    }
+    if (item.id === workflowId) {
+      return { ...item, isDefault: true, updatedAt: nowString() };
+    }
+    return { ...item, isDefault: false };
+  });
+  await persistWorkflowConfigs(workflows);
+  json(response, 200, { ok: true });
+}
+
+async function handleConfirmClosure(body: any, response: import('node:http').ServerResponse) {
+  const { sentimentId, note } = body as { sentimentId: string; note: string };
+  const state = await loadAppState();
+  const target = state.sentiments.find((item) => item.id === sentimentId);
+  if (!target) {
+    return notFound(response);
+  }
+
+  await Promise.all([
+    upsertRecord('sentiments', sentimentId, { ...target, status: '已办结' as SentimentStatus }),
+    persistClosureRecord({
+      sentimentId,
+      note,
+      confirmedBy: '业务分管领导',
+      confirmedAt: nowString(),
+    }),
+  ]);
+
+  json(response, 200, { ok: true });
+}
+
+async function handleUpdateScoringConfig(body: any, response: import('node:http').ServerResponse) {
+  const { weights } = body as { weights: ScoringWeights };
+  await upsertRecord('scoring_config', 'default', weights);
+  json(response, 200, { ok: true });
+}
+
+async function bootstrap() {
+  await ensureSchema();
+  await seedStateIfEmpty();
+
+  const server = createServer(async (request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,OPTIONS');
+
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
+    if (!request.url) {
+      return notFound(response);
+    }
+
+    const url = new URL(request.url, `http://${request.headers.host}`);
+
+    try {
+      if (request.method === 'GET' && url.pathname === '/api/health') {
+        return json(response, 200, { ok: true });
+      }
+      if (request.method === 'GET' && url.pathname === '/api/sentiments') {
+        return await handleGetSentiments(response);
+      }
+      if (request.method === 'GET' && url.pathname === '/api/task-workflow') {
+        return await handleGetTaskWorkflow(response);
+      }
+      if (request.method === 'GET' && url.pathname === '/api/scoring-config') {
+        return await handleGetScoringConfig(response);
+      }
+
+      const body = ['POST', 'PATCH', 'PUT'].includes(request.method || '') ? await readBody(request) : {};
+
+      if (request.method === 'POST' && url.pathname === '/api/sentiments') {
+        return await handleAddSentiment(body, response);
+      }
+      if (request.method === 'PATCH' && url.pathname.startsWith('/api/sentiments/')) {
+        const sentimentId = decodeURIComponent(url.pathname.replace('/api/sentiments/', ''));
+        return await handleUpdateSentiment(sentimentId, body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/sentiments/status') {
+        return await handleUpdateSentimentStatus(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/sentiments/associate') {
+        return await handleAssociateEvents(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/sentiments/report') {
+        return await handleReportSentiments(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/sentiments/closure') {
+        return await handleConfirmClosure(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/assign') {
+        return await handleAssignTask(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/disposal') {
+        return await handleCreateDisposalTask(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/comment') {
+        return await handleCreateCommentTask(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/accept') {
+        return await handleAcceptDisposalTask(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/submit-review') {
+        return await handleSubmitDisposalReview(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/comment/submit') {
+        return await handleSubmitComment(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/reviews/approve') {
+        return await handleApproveReview(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/reviews/reject') {
+        return await handleRejectReview(body, response);
+      }
+      if (request.method === 'PATCH' && url.pathname.startsWith('/api/workflows/')) {
+        const workflowId = decodeURIComponent(url.pathname.replace('/api/workflows/', ''));
+        return await handleUpdateWorkflow(workflowId, body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/workflows') {
+        return await handleCreateWorkflow(body, response);
+      }
+      if (request.method === 'DELETE' && url.pathname.startsWith('/api/workflows/')) {
+        const workflowId = decodeURIComponent(url.pathname.replace('/api/workflows/', ''));
+        return await handleDeleteWorkflow(workflowId, response);
+      }
+      if (request.method === 'POST' && url.pathname.endsWith('/set-default')) {
+        const workflowId = decodeURIComponent(url.pathname.replace('/api/workflows/', '').replace('/set-default', ''));
+        return await handleSetDefaultWorkflow(workflowId, body.scene as WorkflowScene, response);
+      }
+      if (request.method === 'PUT' && url.pathname === '/api/scoring-config') {
+        return await handleUpdateScoringConfig(body, response);
+      }
+
+      return notFound(response);
+    } catch (reason) {
+      return error(response, reason);
+    }
+  });
+
+  server.listen(API_PORT, () => {
+    console.log(`API server listening on http://127.0.0.1:${API_PORT}`);
+  });
+}
+
+bootstrap().catch((reason) => {
+  console.error('Failed to start API server');
+  console.error(reason);
+  process.exit(1);
+});

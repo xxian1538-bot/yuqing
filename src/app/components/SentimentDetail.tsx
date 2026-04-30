@@ -22,14 +22,19 @@ import { SentimentProcessFlow } from './SentimentProcessFlow';
 import { SentimentProcessEvaluation } from './SentimentProcessEvaluation';
 import { SentimentEditDialog } from './SentimentEditDialog';
 import { AssignDialog } from './AssignDialog';
+import { SentimentClosureDialog } from './SentimentClosureDialog';
 import type { EmotionTrend, SentimentStatus } from '../types';
 import { useSentimentData } from '../context/SentimentDataContext';
+import { useTaskWorkflow } from '../context/TaskWorkflowContext';
+import { getAssignmentDisplayName } from '../utils/assignmentTargets';
 
 export function SentimentDetail() {
   const { id } = useParams();
   const { sentiments, updateSentiment } = useSentimentData();
+  const { disposalTasks, commentTasks, getSentimentTaskStatusById, confirmSentimentClosure, getClosureRecordBySentimentId } = useTaskWorkflow();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [isClosureOpen, setIsClosureOpen] = useState(false);
   const sentiment = sentiments.find(s => s.id === id);
 
   if (!sentiment) {
@@ -54,6 +59,10 @@ export function SentimentDetail() {
     .filter(item => relatedGroupIds.includes(item.id))
     .sort((a, b) => new Date(a.publishTime).getTime() - new Date(b.publishTime).getTime());
   const hasRelatedEvents = relatedEvents.length > 1;
+  const taskStatus = getSentimentTaskStatusById(sentiment.id);
+  const relatedDisposalTasks = disposalTasks.filter((task) => task.sentimentId === sentiment.id);
+  const relatedCommentTasks = commentTasks.filter((task) => task.sentimentId === sentiment.id);
+  const closureRecord = getClosureRecordBySentimentId(sentiment.id);
 
   // 获取状态标签样式
   const getStatusBadge = (status: SentimentStatus) => {
@@ -83,6 +92,17 @@ export function SentimentDetail() {
     );
   };
 
+  const getTaskStatusBadge = () => {
+    const styles = {
+      待指派: 'bg-gray-100 text-gray-700',
+      处置中: 'bg-blue-100 text-blue-700',
+      待完结: 'bg-amber-100 text-amber-700',
+      已完结: 'bg-green-100 text-green-700',
+    };
+
+    return <Badge className={styles[taskStatus]}>{taskStatus}</Badge>;
+  };
+
   return (
     <div className="p-6">
       {/* 返回按钮 */}
@@ -101,6 +121,7 @@ export function SentimentDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               {getStatusBadge(sentiment.status)}
+              {getTaskStatusBadge()}
               {getEmotionBadge(sentiment.emotionTrend)}
               <Badge className={
                 sentiment.level === '审批中' ? 'bg-orange-100 text-orange-700' :
@@ -136,6 +157,11 @@ export function SentimentDetail() {
               <UserPlus className="w-4 h-4 mr-2" />
               指派任务
             </Button>
+            {taskStatus === '待完结' ? (
+              <Button variant="outline" onClick={() => setIsClosureOpen(true)}>
+                完结事件
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -283,48 +309,95 @@ export function SentimentDetail() {
 
         <TabsContent value="disposal" className="p-6">
           <div className="space-y-4">
-            {sentiment.status !== '未处理' ? (
+            {relatedDisposalTasks.length > 0 || relatedCommentTasks.length > 0 ? (
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>处置进度</CardTitle>
+                    <CardTitle>任务流转概览</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                          <div className="w-3 h-3 bg-green-600 rounded-full" />
-                          <div className="w-0.5 h-full bg-gray-200" />
-                        </div>
-                        <div className="flex-1 pb-4">
-                          <div className="text-sm font-medium mb-1">任务已创建</div>
-                          <div className="text-xs text-gray-500">{sentiment.publishTime}</div>
-                        </div>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                          <div className="w-3 h-3 bg-green-600 rounded-full" />
-                          <div className="w-0.5 h-full bg-gray-200" />
-                        </div>
-                        <div className="flex-1 pb-4">
-                          <div className="text-sm font-medium mb-1">已分配责任人</div>
-                          <div className="text-xs text-gray-500">负责人：{sentiment.assignee}</div>
-                        </div>
-                      </div>
-                      {sentiment.status === '已办结' && (
-                        <div className="flex gap-4">
-                          <div className="flex flex-col items-center">
-                            <div className="w-3 h-3 bg-green-600 rounded-full" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-medium mb-1">处置完成</div>
-                            <div className="text-xs text-gray-500">任务已审核通过</div>
-                          </div>
-                        </div>
-                      )}
+                  <CardContent className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-md bg-gray-50 p-4">
+                      <div className="text-sm text-gray-500">处置任务</div>
+                      <div className="mt-2 text-2xl font-semibold">{relatedDisposalTasks.length}</div>
+                    </div>
+                    <div className="rounded-md bg-gray-50 p-4">
+                      <div className="text-sm text-gray-500">网评任务</div>
+                      <div className="mt-2 text-2xl font-semibold">{relatedCommentTasks.length}</div>
+                    </div>
+                    <div className="rounded-md bg-gray-50 p-4">
+                      <div className="text-sm text-gray-500">当前任务状态</div>
+                      <div className="mt-2">{getTaskStatusBadge()}</div>
                     </div>
                   </CardContent>
                 </Card>
+
+                {relatedDisposalTasks.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>处置任务记录</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {relatedDisposalTasks.map((task) => (
+                        <div key={task.id} className="rounded-md border border-gray-200 p-4">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="font-medium text-gray-900">{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</div>
+                            <Badge variant="outline">{task.status}</Badge>
+                          </div>
+                          <div className="text-sm text-gray-600">{task.progress || task.measures}</div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            创建时间：{task.createdAt} · 截止时间：{task.deadline}
+                          </div>
+                          {task.reviewStatus ? (
+                            <div className="mt-2 text-xs text-gray-500">
+                              审核状态：{task.reviewStatus}{task.reviewWorkflowName ? ` · ${task.reviewWorkflowName}` : ''}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {relatedCommentTasks.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>网评任务记录</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {relatedCommentTasks.map((task) => (
+                        <div key={task.id} className="rounded-md border border-gray-200 p-4">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div className="font-medium text-gray-900">{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</div>
+                            <Badge variant="outline">{task.status}</Badge>
+                          </div>
+                          <div className="text-sm text-gray-600">{task.goal}</div>
+                          <div className="mt-2 text-xs text-gray-500">
+                            发帖 {task.submissions.length}/{task.requirements.postCount} · 截止时间：{task.requirements.deadline}
+                          </div>
+                          {task.reviewWorkflowName ? (
+                            <div className="mt-2 text-xs text-gray-500">审核流：{task.reviewWorkflowName}</div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {closureRecord ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>领导确认完结</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="rounded-md bg-green-50 p-4 text-sm leading-6 text-gray-700">
+                        {closureRecord.note}
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500">
+                        {closureRecord.confirmedBy} · {closureRecord.confirmedAt}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null}
               </>
             ) : (
               <div className="text-center py-8 text-gray-500">
@@ -349,8 +422,15 @@ export function SentimentDetail() {
       <AssignDialog
         open={isAssignOpen}
         onOpenChange={setIsAssignOpen}
-        sentimentId={sentiment.id}
+        sentimentIds={[sentiment.id]}
         sentimentLevel={sentiment.level}
+      />
+
+      <SentimentClosureDialog
+        open={isClosureOpen}
+        onOpenChange={setIsClosureOpen}
+        sentimentTitle={sentiment.title}
+        onConfirm={(note) => confirmSentimentClosure(sentiment.id, note)}
       />
     </div>
   );

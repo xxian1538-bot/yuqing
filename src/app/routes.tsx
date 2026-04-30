@@ -16,6 +16,9 @@ import { SystemConfig } from './components/settings/SystemConfig';
 import { UserManagement } from './components/settings/UserManagement';
 import { ApiConfig } from './components/settings/ApiConfig';
 import { NotificationConfig } from './components/settings/NotificationConfig';
+import { WorkflowConfigPage } from './components/audit/WorkflowConfigPage';
+import { PendingReviewsPage } from './components/audit/PendingReviewsPage';
+import { MyReviewRequestsPage } from './components/audit/MyReviewRequestsPage';
 
 function PassThrough() {
   return <Outlet />;
@@ -73,6 +76,28 @@ export const router = createBrowserRouter([
         ],
       },
       // Settings routes
+      {
+        path: "audit",
+        Component: PassThrough,
+        children: [
+          {
+            index: true,
+            loader: () => redirect("pending"),
+          },
+          {
+            path: "workflow",
+            Component: WorkflowConfigPage,
+          },
+          {
+            path: "pending",
+            Component: PendingReviewsPage,
+          },
+          {
+            path: "my-requests",
+            Component: MyReviewRequestsPage,
+          },
+        ],
+      },
       {
         path: "settings",
         Component: PassThrough,
