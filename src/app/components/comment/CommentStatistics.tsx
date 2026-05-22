@@ -92,7 +92,8 @@ export function CommentStatistics() {
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { status: '未开始', count: 0, color: 'bg-gray-500' },
+                  { status: '未接收', count: tasks.filter(t => t.status === '未接收' || t.status === '未开始').length, color: 'bg-gray-500' },
+                  { status: '已接收', count: tasks.filter(t => t.status === '已接收').length, color: 'bg-teal-500' },
                   { status: '进行中', count: tasks.filter(t => t.status === '进行中').length, color: 'bg-blue-500' },
                   { status: '已提交', count: tasks.filter(t => t.status === '已提交').length, color: 'bg-yellow-500' },
                   { status: '已审核', count: tasks.filter(t => t.status === '已审核').length, color: 'bg-green-500' },

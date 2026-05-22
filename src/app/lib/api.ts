@@ -115,6 +115,10 @@ export const appApi = {
     method: 'POST',
     body: JSON.stringify({ taskId }),
   }),
+  acceptCommentTask: (taskId: string) => request('/api/tasks/comment/accept', {
+    method: 'POST',
+    body: JSON.stringify({ taskId }),
+  }),
   submitDisposalForReview: (payload: SubmitDisposalPayload) => request('/api/tasks/disposal/submit-review', {
     method: 'POST',
     body: JSON.stringify(payload),

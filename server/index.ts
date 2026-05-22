@@ -223,7 +223,7 @@ async function handleAssignTask(body: any, response: import('node:http').ServerR
         deadline: payload.deadline,
       },
       assignee: payload.assigneeLabel,
-      status: '未开始',
+      status: '未接收',
       submissions: [],
       assignmentTargets: payload.assignmentTargets,
       referenceEventIds: payload.referenceEventIds,
@@ -260,6 +260,18 @@ async function handleAcceptDisposalTask(body: any, response: import('node:http')
       : task
   ));
   await persistDisposalTasks(tasks);
+  json(response, 200, { ok: true });
+}
+
+async function handleAcceptCommentTask(body: any, response: import('node:http').ServerResponse) {
+  const { taskId } = body as { taskId: string };
+  const state = await loadAppState();
+  const tasks = state.commentTasks.map((task) => (
+    task.id === taskId
+      ? { ...task, status: '已接收' as const, updatedAt: nowString() }
+      : task
+  ));
+  await persistCommentTasks(tasks);
   json(response, 200, { ok: true });
 }
 
@@ -654,6 +666,9 @@ async function bootstrap() {
       }
       if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/accept') {
         return await handleAcceptDisposalTask(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/comment/accept') {
+        return await handleAcceptCommentTask(body, response);
       }
       if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/submit-review') {
         return await handleSubmitDisposalReview(body, response);

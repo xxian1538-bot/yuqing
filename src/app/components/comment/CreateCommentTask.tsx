@@ -92,7 +92,7 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
         deadline: formData.deadline.replace('T', ' '),
       },
       assignee: selectedTargetLabels.join('、'),
-      status: '未开始',
+      status: '未接收',
       submissions: [],
       assignmentTargets: selectedTargets,
       referenceEventIds,

@@ -45,6 +45,13 @@ export interface SentimentInfo {
   createdBy: string;
   assignee?: string;
   score?: number;
+  topicCategory?: string;
+  attentionCategory?: string;
+  emotionCategory?: string;
+  mediaSpreadCategory?: string;
+  formatCategory?: string;
+  channelCategory?: string;
+  influenceCategory?: string;
   primaryEventId?: string;
   relatedEventIds?: string[];
 }
@@ -127,7 +134,7 @@ export interface CommentTask {
     deadline: string;
   };
   assignee: string;
-  status: '未开始' | '进行中' | '已提交' | '已审核' | '未通过';
+  status: '未接收' | '已接收' | '未开始' | '进行中' | '已提交' | '已审核' | '未通过';
   submissions: {
     id: string;
     title: string;

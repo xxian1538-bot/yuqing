@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { ExternalLink } from "lucide-react";
 import type { CommentTask } from "../../types";
 import { useTaskWorkflow } from "../../context/TaskWorkflowContext";
 import { useSentimentData } from "../../context/SentimentDataContext";
@@ -72,7 +73,15 @@ export function CommentTaskDetailDialog({ open, onOpenChange, task }: CommentTas
               <div className="space-y-2">
                 {referenceCases.map((item) => (
                   <div key={item.id} className="rounded border border-gray-200 bg-gray-50 p-3 text-sm">
-                    <div className="font-medium text-gray-900">{item.title}</div>
+                    <a
+                      href={`/sentiment/${item.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-start gap-1 font-medium text-blue-600 hover:underline"
+                    >
+                      <span>{item.title}</span>
+                      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    </a>
                     <div className="mt-1 text-xs text-gray-500">{item.publishTime} · {item.unit}</div>
                     <div className="mt-2 text-gray-600">{item.analysis}</div>
                   </div>

@@ -6,76 +6,19 @@ import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { SentimentInfo, SentimentLevel } from "../../types";
 import { useScoringConfig } from "../context/ScoringConfigContext";
-
-interface ScoredOption {
-  value: string;
-  label: string;
-  score: number;
-}
-
-const topicOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 针对包括但不限于生产经营管理领域、员工个人行为的一般见解及观点" },
-  { value: "20", score: 20, label: "20分 - 针对包括但不限于生产经营管理领域、员工个人行为吐槽性质话题" },
-  { value: "30", score: 30, label: "30分 - 针对包括但不限于行政许可、客户服务、员工招录满意度及规范性的投诉" },
-  { value: "50", score: 50, label: "50分 - 针对包括但不限于控烟履约、薪酬、专卖执法等重点领域攻击性话题" },
-  { value: "100", score: 100, label: "100分 - 针对包括但不限于行业体制机制等核心领域的恶意攻击" },
-];
-
-const attentionOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 单条舆情转评赞均在10以下" },
-  { value: "20", score: 20, label: "20分 - 单条舆情转评赞在10-1000之间" },
-  { value: "30", score: 30, label: "30分 - 单条舆情转评赞在1000-10000之间" },
-  { value: "50", score: 50, label: "50分 - 单条舆情信息转评赞1万-5万" },
-  { value: "100", score: 100, label: "100分 - 单条舆情转评赞5万以上" },
-];
-
-const emotionOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 轻微" },
-  { value: "20", score: 20, label: "20分 - 一般" },
-  { value: "30", score: 30, label: "30分 - 较强烈" },
-  { value: "50", score: 50, label: "50分 - 强烈" },
-  { value: "100", score: 100, label: "100分 - 极端" },
-];
-
-const mediaSpreadOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 50%以下" },
-  { value: "20", score: 20, label: "20分 - 50%-100%" },
-  { value: "30", score: 30, label: "30分 - 100%-500%" },
-  { value: "50", score: 50, label: "50分 - 500%-1000%" },
-  { value: "100", score: 100, label: "100分 - 1000%以上" },
-];
-
-const formatOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 文字" },
-  { value: "20", score: 20, label: "20分 - 图文" },
-  { value: "30", score: 30, label: "30分 - 音频" },
-  { value: "50", score: 50, label: "50分 - 视频" },
-  { value: "100", score: 100, label: "100分 - 视频+实图" },
-];
-
-const channelOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 一般性论坛博客、微信公众号" },
-  { value: "20", score: 20, label: "20分 - 网易、搜狐、百度百家等" },
-  { value: "30", score: 30, label: "30分 - 微博、微信、小红书及区县级电视台、问诊平台等" },
-  { value: "50", score: 50, label: "50分 - 今日头条、抖音及省级电视台、问诊平台等" },
-  { value: "100", score: 100, label: "100分 - 全国性媒体及问诊平台" },
-];
-
-const influenceOptions: ScoredOption[] = [
-  { value: "10", score: 10, label: "10分 - 一般性个人账号及自媒体" },
-  { value: "20", score: 20, label: "20分 - 行业门户或具有一定影响力的自媒体" },
-  { value: "30", score: 30, label: "30分 - 加V账号或粉丝1000人以上" },
-  { value: "50", score: 50, label: "50分 - 大V账号或粉丝3000人以上" },
-  { value: "100", score: 100, label: "100分 - 粉丝5000人以上" },
-];
-
-function getOptionScore(options: ScoredOption[], value: string) {
-  return options.find((option) => option.value === value)?.score || 0;
-}
-
-function getWeightedScore(score: number, weight: number) {
-  return Number(((score / 100) * weight).toFixed(2));
-}
+import {
+  attentionOptions,
+  calculateSentimentLevel,
+  channelOptions,
+  emotionOptions,
+  formatOptions,
+  getOptionScore,
+  getWeightedScore,
+  influenceOptions,
+  mediaSpreadOptions,
+  sourceOptions,
+  topicOptions,
+} from "../lib/sentimentScoring";
 
 interface ManualEntryFormProps {
   open: boolean;
@@ -121,25 +64,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
   };
 
   const calculateLevel = () => {
-    const ratioScore =
-      (getOptionScore(topicOptions, formData.topic) / 100) * weights.topicWeight +
-      (getOptionScore(attentionOptions, formData.attention) / 100) * weights.attentionWeight +
-      (getOptionScore(emotionOptions, formData.emotion) / 100) * weights.emotionWeight +
-      (getOptionScore(mediaSpreadOptions, formData.mediaSpread) / 100) * weights.mediaWeight +
-      (getOptionScore(formatOptions, formData.format) / 100) * weights.formatWeight +
-      (getOptionScore(channelOptions, formData.channel) / 100) * weights.channelWeight +
-      (getOptionScore(influenceOptions, formData.influence) / 100) * weights.influenceWeight;
-
-    const totalWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
-    const score = totalWeight > 0 ? Math.round((ratioScore / totalWeight) * 100) : 0;
-
-    let level: SentimentLevel = "轻微";
-    if (score >= 85) level = "特别重大";
-    else if (score >= 70) level = "重大";
-    else if (score >= 50) level = "较大";
-    else if (score >= 30) level = "一般";
-    else level = "轻微";
-
+    const { level, score } = calculateSentimentLevel(formData, weights);
     setCalculatedLevel(level);
     setCalculatedScore(score);
   };
@@ -153,7 +78,14 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
       shareCount: parseInt(formData.shareCount) || 0,
       commentCount: parseInt(formData.commentCount) || 0,
       collectCount: parseInt(formData.collectCount) || 0,
-      score: calculatedScore || 0
+      score: calculatedScore || 0,
+      topicCategory: formData.topic,
+      attentionCategory: formData.attention,
+      emotionCategory: formData.emotion,
+      mediaSpreadCategory: formData.mediaSpread,
+      formatCategory: formData.format,
+      channelCategory: formData.channel,
+      influenceCategory: formData.influence,
     });
     onOpenChange(false);
   };
@@ -182,13 +114,9 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <Select value={formData.source} onValueChange={v => setFormData({...formData, source: v})}>
                   <SelectTrigger><SelectValue placeholder="选择来源平台" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="抖音">抖音</SelectItem>
-                    <SelectItem value="快手">快手</SelectItem>
-                    <SelectItem value="微信公众号">微信公众号</SelectItem>
-                    <SelectItem value="微博">微博</SelectItem>
-                    <SelectItem value="小红书">小红书</SelectItem>
-                    <SelectItem value="B站">B站</SelectItem>
-                    <SelectItem value="今日头条">今日头条</SelectItem>
+                    {sourceOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

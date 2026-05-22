@@ -68,7 +68,18 @@ export function WorkflowConfigPage() {
                       <div className="text-xs text-gray-500">最近更新时间：{workflow.updatedAt}</div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="mr-2 flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <span className="text-sm text-gray-600">启用状态</span>
+                        <Switch
+                          checked={workflow.enabled}
+                          aria-label={`${workflow.name}启用状态`}
+                          onCheckedChange={(checked) => updateWorkflowConfig(workflow.id, { enabled: Boolean(checked) })}
+                        />
+                        <span className={workflow.enabled ? 'text-sm text-blue-600' : 'text-sm text-gray-500'}>
+                          {workflow.enabled ? '已启用' : '已停用'}
+                        </span>
+                      </div>
                       <Button variant="outline" size="sm" onClick={() => setDefaultWorkflowConfig(workflow.id, workflow.scene)}>
                         <Star className="mr-2 h-4 w-4" />
                         设为默认
@@ -92,7 +103,7 @@ export function WorkflowConfigPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+                  <div className="grid gap-4">
                     <div className="space-y-3">
                       {workflow.steps.map((step, index) => (
                         <div key={step.id} className="rounded-md border border-gray-200 bg-gray-50 p-4">
@@ -109,14 +120,6 @@ export function WorkflowConfigPage() {
                           </div>
                         </div>
                       ))}
-                    </div>
-
-                    <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
-                      <span className="text-sm text-gray-600">{workflow.enabled ? '启用中' : '已停用'}</span>
-                      <Switch
-                        checked={workflow.enabled}
-                        onCheckedChange={(checked) => updateWorkflowConfig(workflow.id, { enabled: Boolean(checked) })}
-                      />
                     </div>
                   </div>
                 </div>

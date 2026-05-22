@@ -1,118 +1,141 @@
-import { Pool, type PoolConfig } from 'pg';
+import mysql, { type Pool, type PoolOptions, type RowDataPacket } from 'mysql2/promise';
 import { loadLocalEnv } from './env';
 
 loadLocalEnv();
 
-interface ParsedConnection {
-  user: string;
-  password: string;
+interface MysqlConfig {
   host: string;
   port: number;
   database: string;
+  user: string;
+  password: string;
 }
 
-function parseBracketedConnectionString(connectionString: string): ParsedConnection | null {
-  const match = connectionString.match(/^postgresql:\/\/([^:]+):\[(.*)\]@([^:/]+):(\d+)\/(.+)$/);
+interface AppRecordRow extends RowDataPacket {
+  data: unknown;
+}
 
-  if (!match) {
+interface CountRow extends RowDataPacket {
+  count: number;
+}
+
+let pool: Pool | null = null;
+
+function parseMysqlConnectionString(connectionString: string): MysqlConfig | null {
+  try {
+    const url = new URL(connectionString);
+
+    if (!['mysql:', 'mysql2:'].includes(url.protocol)) {
+      return null;
+    }
+
+    return {
+      host: url.hostname,
+      port: Number(url.port || 3306),
+      database: url.pathname.replace(/^\//, '') || 'yuqing',
+      user: decodeURIComponent(url.username || 'root'),
+      password: decodeURIComponent(url.password || ''),
+    };
+  } catch {
     return null;
+  }
+}
+
+function getMysqlConfig(): MysqlConfig {
+  const fromUrl = process.env.MYSQL_URL ? parseMysqlConnectionString(process.env.MYSQL_URL) : null;
+
+  if (fromUrl) {
+    return fromUrl;
   }
 
   return {
-    user: match[1],
-    password: match[2],
-    host: match[3],
-    port: Number(match[4]),
-    database: match[5],
+    host: process.env.MYSQL_HOST || '127.0.0.1',
+    port: Number(process.env.MYSQL_PORT || 3306),
+    database: process.env.MYSQL_DATABASE || 'yuqing',
+    user: process.env.MYSQL_USER || 'root',
+    password: process.env.MYSQL_PASSWORD || '',
   };
 }
 
-function getPoolConfig(): PoolConfig {
-  const bracketed = process.env.DATABASE_URL ? parseBracketedConnectionString(process.env.DATABASE_URL) : null;
-
-  if (bracketed) {
-    return {
-      host: bracketed.host,
-      port: bracketed.port,
-      database: bracketed.database,
-      user: bracketed.user,
-      password: bracketed.password,
-      ssl: { rejectUnauthorized: false },
-    };
-  }
-
-  if (process.env.DATABASE_URL) {
-    return {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    };
-  }
-
-  if (
-    process.env.SUPABASE_DB_HOST &&
-    process.env.SUPABASE_DB_PORT &&
-    process.env.SUPABASE_DB_NAME &&
-    process.env.SUPABASE_DB_USER &&
-    process.env.SUPABASE_DB_PASSWORD
-  ) {
-    return {
-      host: process.env.SUPABASE_DB_HOST,
-      port: Number(process.env.SUPABASE_DB_PORT),
-      database: process.env.SUPABASE_DB_NAME,
-      user: process.env.SUPABASE_DB_USER,
-      password: process.env.SUPABASE_DB_PASSWORD,
-      ssl: { rejectUnauthorized: false },
-    };
-  }
-
-  throw new Error('Missing Supabase database configuration');
+function getPoolOptions(config: MysqlConfig, includeDatabase: boolean): PoolOptions {
+  return {
+    host: config.host,
+    port: config.port,
+    database: includeDatabase ? config.database : undefined,
+    user: config.user,
+    password: config.password,
+    waitForConnections: true,
+    connectionLimit: 10,
+    namedPlaceholders: false,
+    timezone: 'Z',
+  };
 }
 
-export const pool = new Pool(getPoolConfig());
+function quoteIdentifier(identifier: string) {
+  return `\`${identifier.replace(/`/g, '``')}\``;
+}
+
+function getPool() {
+  if (!pool) {
+    pool = mysql.createPool(getPoolOptions(getMysqlConfig(), true));
+  }
+
+  return pool;
+}
+
+function normalizeJson<T>(value: unknown): T {
+  if (typeof value === 'string') {
+    return JSON.parse(value) as T;
+  }
+
+  return value as T;
+}
 
 export async function ensureSchema() {
-  await pool.query(`
-    create table if not exists app_records (
-      collection text not null,
-      id text not null,
-      data jsonb not null,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      primary key (collection, id)
-    )
-  `);
+  const config = getMysqlConfig();
+  const adminPool = mysql.createPool(getPoolOptions(config, false));
 
-  await pool.query(`
-    create index if not exists idx_app_records_collection_updated_at
-    on app_records (collection, updated_at desc)
+  try {
+    await adminPool.query(`create database if not exists ${quoteIdentifier(config.database)} character set utf8mb4 collate utf8mb4_unicode_ci`);
+  } finally {
+    await adminPool.end();
+  }
+
+  await getPool().query(`
+    create table if not exists app_records (
+      collection varchar(100) not null,
+      id varchar(100) not null,
+      data json not null,
+      created_at timestamp not null default current_timestamp,
+      updated_at timestamp not null default current_timestamp on update current_timestamp,
+      primary key (collection, id),
+      index idx_app_records_collection_updated_at (collection, updated_at)
+    ) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci
   `);
 }
 
 export async function listCollection<T>(collection: string): Promise<T[]> {
-  const result = await pool.query<{ data: T }>(
-    'select data from app_records where collection = $1 order by updated_at desc, id asc',
+  const [rows] = await getPool().query<AppRecordRow[]>(
+    'select data from app_records where collection = ? order by updated_at desc, id asc',
     [collection],
   );
-  return result.rows.map((row) => row.data);
+
+  return rows.map((row) => normalizeJson<T>(row.data));
 }
 
 export async function countCollection(collection: string): Promise<number> {
-  const result = await pool.query<{ count: string }>(
-    'select count(*)::text as count from app_records where collection = $1',
-    [collection],
-  );
-  return Number(result.rows[0]?.count || 0);
+  const [rows] = await getPool().query<CountRow[]>('select count(*) as count from app_records where collection = ?', [collection]);
+  return Number(rows[0]?.count || 0);
 }
 
 export async function upsertRecord(collection: string, id: string, data: unknown) {
-  await pool.query(
+  await getPool().query(
     `
       insert into app_records (collection, id, data)
-      values ($1, $2, $3::jsonb)
-      on conflict (collection, id)
-      do update set
-        data = excluded.data,
-        updated_at = now()
+      values (?, ?, cast(? as json))
+      on duplicate key update
+        data = values(data),
+        updated_at = current_timestamp
     `,
     [collection, id, JSON.stringify(data)],
   );
@@ -123,34 +146,33 @@ export async function upsertMany(collection: string, items: Array<{ id: string; 
     return;
   }
 
-  const client = await pool.connect();
+  const connection = await getPool().getConnection();
 
   try {
-    await client.query('begin');
+    await connection.beginTransaction();
 
     for (const item of items) {
-      await client.query(
+      await connection.query(
         `
           insert into app_records (collection, id, data)
-          values ($1, $2, $3::jsonb)
-          on conflict (collection, id)
-          do update set
-            data = excluded.data,
-            updated_at = now()
+          values (?, ?, cast(? as json))
+          on duplicate key update
+            data = values(data),
+            updated_at = current_timestamp
         `,
         [collection, item.id, JSON.stringify(item.data)],
       );
     }
 
-    await client.query('commit');
+    await connection.commit();
   } catch (error) {
-    await client.query('rollback');
+    await connection.rollback();
     throw error;
   } finally {
-    client.release();
+    connection.release();
   }
 }
 
 export async function deleteRecord(collection: string, id: string) {
-  await pool.query('delete from app_records where collection = $1 and id = $2', [collection, id]);
+  await getPool().query('delete from app_records where collection = ? and id = ?', [collection, id]);
 }

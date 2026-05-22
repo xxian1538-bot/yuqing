@@ -23,10 +23,24 @@ import { SentimentProcessEvaluation } from './SentimentProcessEvaluation';
 import { SentimentEditDialog } from './SentimentEditDialog';
 import { AssignDialog } from './AssignDialog';
 import { SentimentClosureDialog } from './SentimentClosureDialog';
+import { ReportDialog } from './ReportDialog';
 import type { EmotionTrend, SentimentStatus } from '../types';
 import { useSentimentData } from '../context/SentimentDataContext';
 import { useTaskWorkflow } from '../context/TaskWorkflowContext';
 import { getAssignmentDisplayName } from '../utils/assignmentTargets';
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeFileName(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || '舆情事件';
+}
 
 export function SentimentDetail() {
   const { id } = useParams();
@@ -35,6 +49,7 @@ export function SentimentDetail() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isClosureOpen, setIsClosureOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const sentiment = sentiments.find(s => s.id === id);
 
   if (!sentiment) {
@@ -103,6 +118,140 @@ export function SentimentDetail() {
     return <Badge className={styles[taskStatus]}>{taskStatus}</Badge>;
   };
 
+  const handleExport = () => {
+    const infoRows = [
+      ['事件编号', sentiment.id],
+      ['事件标题', sentiment.title],
+      ['事件等级', sentiment.level],
+      ['事件状态', sentiment.status],
+      ['任务状态', taskStatus],
+      ['情感倾向', sentiment.emotionTrend],
+      ['来源平台', sentiment.source],
+      ['发布时间', sentiment.publishTime],
+      ['领域', sentiment.field],
+      ['单位', sentiment.unit],
+      ['原文链接', sentiment.link],
+    ];
+    const metricRows = [
+      ['阅读量', sentiment.readCount],
+      ['评论量', sentiment.commentCount],
+      ['点赞量', sentiment.likeCount],
+      ['转发量', sentiment.shareCount],
+      ['收藏量', sentiment.collectCount],
+    ];
+    const renderRows = (rows: Array<[string, unknown]>) => rows
+      .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
+      .join('');
+    const renderDisposalTasks = relatedDisposalTasks.length > 0
+      ? relatedDisposalTasks.map((task, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(getAssignmentDisplayName(task.assignmentTargets, task.assignee))}</td>
+            <td>${escapeHtml(task.status)}</td>
+            <td>${escapeHtml(task.deadline)}</td>
+            <td>${escapeHtml(task.progress || task.measures)}</td>
+            <td>${escapeHtml(task.reviewStatus || '未提交审核')}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="6">暂无处置任务</td></tr>';
+    const renderCommentTasks = relatedCommentTasks.length > 0
+      ? relatedCommentTasks.map((task, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(getAssignmentDisplayName(task.assignmentTargets, task.assignee))}</td>
+            <td>${escapeHtml(task.status)}</td>
+            <td>${escapeHtml(task.requirements.deadline)}</td>
+            <td>${escapeHtml(task.goal)}</td>
+            <td>${escapeHtml(`${task.submissions.length}/${task.requirements.postCount}`)}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="6">暂无网评任务</td></tr>';
+    const renderRelatedEvents = relatedEvents.length > 1
+      ? relatedEvents.map((event, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(event.title)}</td>
+            <td>${escapeHtml(event.level)}</td>
+            <td>${escapeHtml(event.publishTime)}</td>
+            <td>${escapeHtml(event.source)}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="5">暂无关联事件</td></tr>';
+    const wordHtml = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(sentiment.title)}</title>
+          <style>
+            body { font-family: "Microsoft YaHei", Arial, sans-serif; color: #1f2937; line-height: 1.65; }
+            h1 { font-size: 24px; margin: 0 0 18px; }
+            h2 { font-size: 18px; margin: 24px 0 10px; border-bottom: 1px solid #d9d9d9; padding-bottom: 6px; }
+            table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
+            th, td { border: 1px solid #d9d9d9; padding: 8px 10px; vertical-align: top; font-size: 13px; }
+            th { width: 120px; background: #f5f7fa; text-align: left; font-weight: 600; }
+            .content { border: 1px solid #d9d9d9; background: #fafafa; padding: 12px; margin: 8px 0 16px; }
+            .meta { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(sentiment.title)}</h1>
+          <div class="meta">导出时间：${escapeHtml(new Date().toLocaleString('zh-CN'))}</div>
+
+          <h2>基本信息</h2>
+          <table>${renderRows(infoRows)}</table>
+
+          <h2>互动数据</h2>
+          <table>${renderRows(metricRows)}</table>
+
+          <h2>舆情内容</h2>
+          <h3>内容摘要</h3>
+          <div class="content">${escapeHtml(sentiment.summary)}</div>
+          <h3>完整内容</h3>
+          <div class="content">${escapeHtml(sentiment.content)}</div>
+          <h3>研判意见</h3>
+          <div class="content">${escapeHtml(sentiment.analysis)}</div>
+
+          <h2>处置任务</h2>
+          <table>
+            <tr><th>序号</th><th>处理对象</th><th>状态</th><th>截止时间</th><th>进展/措施</th><th>审核状态</th></tr>
+            ${renderDisposalTasks}
+          </table>
+
+          <h2>网评任务</h2>
+          <table>
+            <tr><th>序号</th><th>处理对象</th><th>状态</th><th>截止时间</th><th>任务目标</th><th>完成进度</th></tr>
+            ${renderCommentTasks}
+          </table>
+
+          <h2>关联事件</h2>
+          <table>
+            <tr><th>序号</th><th>事件标题</th><th>等级</th><th>发布时间</th><th>来源</th></tr>
+            ${renderRelatedEvents}
+          </table>
+
+          <h2>完结记录</h2>
+          <div class="content">
+            ${
+              closureRecord
+                ? `完结说明：${escapeHtml(closureRecord.note)}<br />确认人：${escapeHtml(closureRecord.confirmedBy)}<br />确认时间：${escapeHtml(closureRecord.confirmedAt)}`
+                : '暂无完结记录'
+            }
+          </div>
+        </body>
+      </html>
+    `;
+    const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFileName(`舆情事件-${sentiment.id}-${sentiment.title}`)}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6">
       {/* 返回按钮 */}
@@ -145,11 +294,11 @@ export function SentimentDetail() {
               <Pencil className="w-4 h-4 mr-2" />
               编辑事件
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
               导出
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setIsReportOpen(true)}>
               <Send className="w-4 h-4 mr-2" />
               报送
             </Button>
@@ -424,6 +573,12 @@ export function SentimentDetail() {
         onOpenChange={setIsAssignOpen}
         sentimentIds={[sentiment.id]}
         sentimentLevel={sentiment.level}
+      />
+
+      <ReportDialog
+        open={isReportOpen}
+        onOpenChange={setIsReportOpen}
+        sentimentIds={[sentiment.id]}
       />
 
       <SentimentClosureDialog

@@ -6,7 +6,6 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Switch } from '../ui/switch';
 import { TargetOptionGroup, TargetPickerDialog } from '../TargetPickerDialog';
 import type { WorkflowConfig, WorkflowScene } from '../../types';
 import { assignmentTargetGroups, getAssignmentTargetLabel } from '../../utils/assignmentTargets';
@@ -154,28 +153,6 @@ export function WorkflowConfigDialog({
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <div>
-                <div className="text-sm font-medium text-gray-900">设为默认流程</div>
-                <div className="text-xs text-gray-500">该场景发起完结审核时默认选中此流程</div>
-              </div>
-              <Switch
-                checked={draft.isDefault}
-                onCheckedChange={(checked) => setDraft((prev) => ({ ...prev, isDefault: Boolean(checked) }))}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-              <div>
-                <div className="text-sm font-medium text-gray-900">启用状态</div>
-                <div className="text-xs text-gray-500">停用后任务发起时不可选</div>
-              </div>
-              <Switch
-                checked={draft.enabled}
-                onCheckedChange={(checked) => setDraft((prev) => ({ ...prev, enabled: Boolean(checked) }))}
-              />
-            </div>
-
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -259,7 +236,7 @@ export function WorkflowConfigDialog({
             </div>
 
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              当前配置：{draft.steps.length} 级审核 · {workflowModeLabels[draft.mode]} · {draft.enabled ? '启用' : '停用'}
+              当前配置：{draft.steps.length} 级审核 · {workflowModeLabels[draft.mode]}
             </div>
           </div>
 

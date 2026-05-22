@@ -24,6 +24,7 @@ export function CommentTaskList() {
     commentTasks: tasks,
     workflowConfigs,
     createCommentTask,
+    acceptCommentTask,
     submitCommentExecution,
   } = useTaskWorkflow();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -47,6 +48,8 @@ export function CommentTaskList() {
   // 获取状态标签
   const getStatusBadge = (status: CommentTask['status']) => {
     const styles = {
+      '未接收': 'bg-gray-100 text-gray-700',
+      '已接收': 'bg-teal-100 text-teal-700',
       '未开始': 'bg-gray-100 text-gray-700',
       '进行中': 'bg-blue-100 text-blue-700',
       '已提交': 'bg-yellow-100 text-yellow-700',
@@ -87,7 +90,7 @@ export function CommentTaskList() {
             <div className="text-sm">
               <span className="text-gray-600">进行中：</span>
               <span className="font-semibold text-blue-600">
-                {tasks.filter(t => t.status === '进行中').length}
+                {tasks.filter(t => ['已接收', '进行中'].includes(t.status)).length}
               </span>
             </div>
             <div className="text-sm">
@@ -194,7 +197,17 @@ export function CommentTaskList() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {['未开始', '进行中'].includes(task.status) && (
+                    {['未接收', '未开始'].includes(task.status) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600"
+                        onClick={() => acceptCommentTask(task.id)}
+                      >
+                        接收
+                      </Button>
+                    )}
+                    {['已接收', '进行中'].includes(task.status) && (
                       <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
                         setCurrentTask(task);
                         setIsExecuteOpen(true);

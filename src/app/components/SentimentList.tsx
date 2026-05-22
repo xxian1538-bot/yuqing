@@ -542,7 +542,14 @@ export function SentimentList() {
             link: data.link || '',
             analysis: data.summary || '',
             createdBy: '当前用户',
-            score: data.score
+            score: data.score,
+            topicCategory: data.topicCategory,
+            attentionCategory: data.attentionCategory,
+            emotionCategory: data.emotionCategory,
+            mediaSpreadCategory: data.mediaSpreadCategory,
+            formatCategory: data.formatCategory,
+            channelCategory: data.channelCategory,
+            influenceCategory: data.influenceCategory,
           };
           addSentiment(newSentiment);
         }}

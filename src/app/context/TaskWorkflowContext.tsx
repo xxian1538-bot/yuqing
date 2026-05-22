@@ -21,6 +21,7 @@ interface TaskWorkflowContextValue {
   createDisposalTask: (task: DisposalTask) => void;
   createCommentTask: (task: CommentTask) => void;
   acceptDisposalTask: (taskId: string) => void;
+  acceptCommentTask: (taskId: string) => void;
   submitDisposalForReview: (payload: SubmitDisposalPayload) => void;
   submitCommentExecution: (payload: SubmitCommentPayload) => void;
   approveReview: (reviewId: string, comment: string) => void;
@@ -79,6 +80,17 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
         await loadTaskWorkflow();
       } catch (error) {
         console.error('Failed to accept disposal task', error);
+      }
+    })();
+  };
+
+  const acceptCommentTask = (taskId: string) => {
+    void (async () => {
+      try {
+        await appApi.acceptCommentTask(taskId);
+        await loadTaskWorkflow();
+      } catch (error) {
+        console.error('Failed to accept comment task', error);
       }
     })();
   };
@@ -222,6 +234,7 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
       })();
     },
     acceptDisposalTask,
+    acceptCommentTask,
     submitDisposalForReview,
     submitCommentExecution,
     approveReview,
