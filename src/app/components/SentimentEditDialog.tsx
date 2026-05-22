@@ -25,7 +25,7 @@ interface SentimentEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sentiment: SentimentInfo | null;
-  onSubmit: (updates: Partial<SentimentInfo>) => void;
+  onSubmit: (updates: Partial<SentimentInfo>) => void | Promise<void>;
 }
 
 function toDateTimeLocalValue(value: string) {
@@ -129,31 +129,35 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
     setCalculatedScore(score);
   };
 
-  const handleSubmit = () => {
-    onSubmit({
-      title: formData.title,
-      summary: formData.summary,
-      content: formData.content,
-      source: formData.source,
-      publishTime: formData.publishTime,
-      analysis: formData.analysis,
-      link: formData.link,
-      readCount: parseInt(formData.readCount, 10) || 0,
-      likeCount: parseInt(formData.likeCount, 10) || 0,
-      shareCount: parseInt(formData.shareCount, 10) || 0,
-      commentCount: parseInt(formData.commentCount, 10) || 0,
-      collectCount: parseInt(formData.collectCount, 10) || 0,
-      level: calculatedLevel,
-      score: calculatedScore,
-      topicCategory: formData.topic,
-      attentionCategory: formData.attention,
-      emotionCategory: formData.emotion,
-      mediaSpreadCategory: formData.mediaSpread,
-      formatCategory: formData.format,
-      channelCategory: formData.channel,
-      influenceCategory: formData.influence,
-    });
-    onOpenChange(false);
+  const handleSubmit = async () => {
+    try {
+      await onSubmit({
+        title: formData.title,
+        summary: formData.summary,
+        content: formData.content,
+        source: formData.source,
+        publishTime: formData.publishTime,
+        analysis: formData.analysis,
+        link: formData.link,
+        readCount: parseInt(formData.readCount, 10) || 0,
+        likeCount: parseInt(formData.likeCount, 10) || 0,
+        shareCount: parseInt(formData.shareCount, 10) || 0,
+        commentCount: parseInt(formData.commentCount, 10) || 0,
+        collectCount: parseInt(formData.collectCount, 10) || 0,
+        level: calculatedLevel,
+        score: calculatedScore,
+        topicCategory: formData.topic,
+        attentionCategory: formData.attention,
+        emotionCategory: formData.emotion,
+        mediaSpreadCategory: formData.mediaSpread,
+        formatCategory: formData.format,
+        channelCategory: formData.channel,
+        influenceCategory: formData.influence,
+      });
+      onOpenChange(false);
+    } catch {
+      // 保存失败时保持弹窗打开
+    }
   };
 
   return (

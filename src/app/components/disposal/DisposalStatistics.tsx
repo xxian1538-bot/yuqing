@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { mockDisposalTasks } from '../../data/mockData';
+import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 
 export function DisposalStatistics() {
-  const tasks = mockDisposalTasks;
+  const { disposalTasks: tasks } = useTaskWorkflow();
 
   // 获取等级标签
   const getLevelBadge = (level: string) => {

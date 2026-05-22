@@ -41,7 +41,7 @@ import { useSentimentData } from '../context/SentimentDataContext';
 import { useTaskWorkflow } from '../context/TaskWorkflowContext';
 
 export function SentimentList() {
-  const { sentiments, addSentiment, updateSentiment, associateEvents } = useSentimentData();
+  const { sentiments, addSentiment, updateSentiment, deleteSentiments, associateEvents } = useSentimentData();
   const { getSentimentTaskStatusById, confirmSentimentClosure } = useTaskWorkflow();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -221,7 +221,19 @@ export function SentimentList() {
             <Link2 className="w-4 h-4 mr-2" />
             手动关联
           </Button>
-          <Button variant="outline" disabled={selectedIds.length === 0}>
+          <Button
+            variant="outline"
+            disabled={selectedIds.length === 0}
+            onClick={async () => {
+              try {
+                await deleteSentiments(selectedIds);
+                setSelectedIds([]);
+                setCurrentPage(1);
+              } catch {
+                // toast 已在 context 中提示
+              }
+            }}
+          >
             <Trash2 className="w-4 h-4 mr-2" />
             删除
           </Button>
@@ -520,7 +532,7 @@ export function SentimentList() {
       <ManualEntryForm
         open={isManualEntryOpen}
         onOpenChange={setIsManualEntryOpen}
-        onSubmit={(data) => {
+        onSubmit={async (data) => {
           const newSentiment: SentimentInfo = {
             id: String(Date.now()),
             title: data.title || '无标题',
@@ -551,7 +563,8 @@ export function SentimentList() {
             channelCategory: data.channelCategory,
             influenceCategory: data.influenceCategory,
           };
-          addSentiment(newSentiment);
+          await addSentiment(newSentiment);
+          setCurrentPage(1);
         }}
       />
 
@@ -577,9 +590,9 @@ export function SentimentList() {
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         sentiment={currentSentiment}
-        onSubmit={(updates) => {
+        onSubmit={async (updates) => {
           if (currentSentiment) {
-            updateSentiment(currentSentiment.id, updates);
+            await updateSentiment(currentSentiment.id, updates);
           }
         }}
       />

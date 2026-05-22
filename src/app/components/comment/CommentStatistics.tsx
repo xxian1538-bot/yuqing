@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { mockCommentTasks } from '../../data/mockData';
+import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 
 export function CommentStatistics() {
-  const tasks = mockCommentTasks;
+  const { commentTasks: tasks } = useTaskWorkflow();
 
   return (
     <div className="space-y-6">

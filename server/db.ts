@@ -1,9 +1,9 @@
 import mysql, { type Pool, type PoolOptions, type RowDataPacket } from 'mysql2/promise';
-import { loadLocalEnv } from './env';
+import { loadEnv } from './env';
 
-loadLocalEnv();
+loadEnv();
 
-interface MysqlConfig {
+export interface MysqlConfig {
   host: string;
   port: number;
   database: string;
@@ -41,7 +41,7 @@ function parseMysqlConnectionString(connectionString: string): MysqlConfig | nul
   }
 }
 
-function getMysqlConfig(): MysqlConfig {
+export function getMysqlConfig(): MysqlConfig {
   const fromUrl = process.env.MYSQL_URL ? parseMysqlConnectionString(process.env.MYSQL_URL) : null;
 
   if (fromUrl) {
@@ -91,14 +91,39 @@ function normalizeJson<T>(value: unknown): T {
   return value as T;
 }
 
+export async function waitForMysql(maxAttempts = 30, delayMs = 2000) {
+  const config = getMysqlConfig();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const probe = mysql.createPool(getPoolOptions(config, false));
+
+    try {
+      await probe.query('select 1');
+      await probe.end();
+      return;
+    } catch (error) {
+      await probe.end().catch(() => undefined);
+
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export async function ensureSchema() {
   const config = getMysqlConfig();
-  const adminPool = mysql.createPool(getPoolOptions(config, false));
 
-  try {
-    await adminPool.query(`create database if not exists ${quoteIdentifier(config.database)} character set utf8mb4 collate utf8mb4_unicode_ci`);
-  } finally {
-    await adminPool.end();
+  if (process.env.MYSQL_SKIP_ENSURE_DATABASE !== 'true') {
+    const adminPool = mysql.createPool(getPoolOptions(config, false));
+
+    try {
+      await adminPool.query(`create database if not exists ${quoteIdentifier(config.database)} character set utf8mb4 collate utf8mb4_unicode_ci`);
+    } finally {
+      await adminPool.end();
+    }
   }
 
   await getPool().query(`
@@ -175,4 +200,24 @@ export async function upsertMany(collection: string, items: Array<{ id: string; 
 
 export async function deleteRecord(collection: string, id: string) {
   await getPool().query('delete from app_records where collection = ? and id = ?', [collection, id]);
+}
+
+export async function deleteMany(collection: string, ids: string[]) {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  await getPool().query(
+    `delete from app_records where collection = ? and id in (${placeholders})`,
+    [collection, ...ids],
+  );
+}
+
+export async function getCollectionStats() {
+  const [rows] = await getPool().query<RowDataPacket[]>(
+    'select collection, count(*) as count from app_records group by collection order by collection asc',
+  );
+
+  return Object.fromEntries(rows.map((row) => [String(row.collection), Number(row.count)]));
 }

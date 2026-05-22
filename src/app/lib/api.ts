@@ -57,8 +57,10 @@ export interface TaskWorkflowState {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
       ...(init?.headers || {}),
     },
     ...init,
@@ -77,10 +79,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const appApi = {
-  getSentiments: () => request<SentimentInfo[]>('/api/sentiments'),
+  getSentiments: () => request<SentimentInfo[]>(`/api/sentiments?_=${Date.now()}`),
+  getHealth: () => request<{
+    ok: boolean;
+    mysql: { host: string; port: number; database: string; user: string };
+    storage: string;
+    counts: Record<string, number>;
+  }>('/api/health'),
   addSentiment: (sentiment: SentimentInfo) => request('/api/sentiments', {
     method: 'POST',
     body: JSON.stringify({ sentiment }),
+  }),
+  deleteSentiment: (sentimentId: string) => request(`/api/sentiments/${sentimentId}`, {
+    method: 'DELETE',
+  }),
+  deleteSentiments: (ids: string[]) => request('/api/sentiments/delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
   }),
   updateSentiment: (sentimentId: string, updates: Partial<SentimentInfo>) => request(`/api/sentiments/${sentimentId}`, {
     method: 'PATCH',

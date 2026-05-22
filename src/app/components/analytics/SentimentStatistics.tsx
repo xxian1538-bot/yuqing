@@ -17,9 +17,10 @@ import {
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Calendar } from 'lucide-react';
 import { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { mockSentiments } from '../../data/mockData';
+import { useSentimentData } from '../../context/SentimentDataContext';
 
 export function SentimentStatistics() {
+  const { sentiments } = useSentimentData();
   const [dateRange, setDateRange] = useState("7days");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
@@ -35,20 +36,19 @@ export function SentimentStatistics() {
     { date: '03-24', count: 22, positive: 10, neutral: 8, negative: 4 },
   ];
 
-  // 等级分布数据
   const levelData = [
-    { name: '轻微', value: 2, color: '#3b82f6' },
-    { name: '一般', value: 3, color: '#eab308' },
-    { name: '较大', value: 1, color: '#f97316' },
-    { name: '重大', value: 0, color: '#ef4444' },
-    { name: '特别重大', value: 0, color: '#a855f7' },
+    { name: '轻微', value: sentiments.filter((s) => s.level === '轻微').length, color: '#3b82f6' },
+    { name: '一般', value: sentiments.filter((s) => s.level === '一般').length, color: '#eab308' },
+    { name: '较大', value: sentiments.filter((s) => s.level === '较大').length, color: '#f97316' },
+    { name: '重大', value: sentiments.filter((s) => s.level === '重大').length, color: '#ef4444' },
+    { name: '特别重大', value: sentiments.filter((s) => s.level === '特别重大').length, color: '#a855f7' },
   ];
 
   // 情感分布数据
   const emotionData = [
-    { name: '正面', value: mockSentiments.filter(s => s.emotionTrend === '正面').length, color: '#10b981' },
-    { name: '中性', value: mockSentiments.filter(s => s.emotionTrend === '中性').length, color: '#6b7280' },
-    { name: '负面', value: mockSentiments.filter(s => s.emotionTrend === '负面').length, color: '#ef4444' },
+    { name: '正面', value: sentiments.filter(s => s.emotionTrend === '正面').length, color: '#10b981' },
+    { name: '中性', value: sentiments.filter(s => s.emotionTrend === '中性').length, color: '#6b7280' },
+    { name: '负面', value: sentiments.filter(s => s.emotionTrend === '负面').length, color: '#ef4444' },
   ];
 
   // 来源分布数据
@@ -69,7 +69,7 @@ export function SentimentStatistics() {
               <TrendingUp className="w-4 h-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold">{mockSentiments.length}</div>
+              <div className="text-2xl font-semibold">{sentiments.length}</div>
               <p className="text-xs text-green-600 mt-1">
                 <span className="inline-flex items-center">
                   <TrendingUp className="w-3 h-3 mr-1" />
@@ -86,7 +86,7 @@ export function SentimentStatistics() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold text-red-600">
-                {mockSentiments.filter(s => s.status === '未处理').length}
+                {sentiments.filter(s => s.status === '未处理').length}
               </div>
               <p className="text-xs text-red-600 mt-1">
                 <span className="inline-flex items-center">
@@ -104,7 +104,7 @@ export function SentimentStatistics() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold text-blue-600">
-                {mockSentiments.filter(s => s.status === '跟进中').length}
+                {sentiments.filter(s => s.status === '跟进中').length}
               </div>
               <p className="text-xs text-blue-600 mt-1">
                 <span className="inline-flex items-center">
@@ -121,12 +121,12 @@ export function SentimentStatistics() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-semibold text-green-600">
-                {mockSentiments.filter(s => s.status === '已办结').length}
+                {sentiments.filter(s => s.status === '已办结').length}
               </div>
               <p className="text-xs text-green-600 mt-1">
                 <span className="inline-flex items-center">
                   <TrendingDown className="w-3 h-3 mr-1" />
-                  完成率 {((mockSentiments.filter(s => s.status === '已办结').length / mockSentiments.length) * 100).toFixed(1)}%
+                  完成率 {sentiments.length === 0 ? '0.0' : ((sentiments.filter(s => s.status === '已办结').length / sentiments.length) * 100).toFixed(1)}%
                 </span>
               </p>
             </CardContent>

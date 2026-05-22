@@ -23,7 +23,7 @@ import {
 interface ManualEntryFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Partial<SentimentInfo>) => void;
+  onSubmit: (data: Partial<SentimentInfo>) => void | Promise<void>;
 }
 
 export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFormProps) {
@@ -69,25 +69,29 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
     setCalculatedScore(score);
   };
 
-  const handleSubmit = () => {
-    onSubmit({
-      ...formData,
-      level: calculatedLevel || "轻微",
-      readCount: parseInt(formData.readCount) || 0,
-      likeCount: parseInt(formData.likeCount) || 0,
-      shareCount: parseInt(formData.shareCount) || 0,
-      commentCount: parseInt(formData.commentCount) || 0,
-      collectCount: parseInt(formData.collectCount) || 0,
-      score: calculatedScore || 0,
-      topicCategory: formData.topic,
-      attentionCategory: formData.attention,
-      emotionCategory: formData.emotion,
-      mediaSpreadCategory: formData.mediaSpread,
-      formatCategory: formData.format,
-      channelCategory: formData.channel,
-      influenceCategory: formData.influence,
-    });
-    onOpenChange(false);
+  const handleSubmit = async () => {
+    try {
+      await onSubmit({
+        ...formData,
+        level: calculatedLevel || "轻微",
+        readCount: parseInt(formData.readCount) || 0,
+        likeCount: parseInt(formData.likeCount) || 0,
+        shareCount: parseInt(formData.shareCount) || 0,
+        commentCount: parseInt(formData.commentCount) || 0,
+        collectCount: parseInt(formData.collectCount) || 0,
+        score: calculatedScore || 0,
+        topicCategory: formData.topic,
+        attentionCategory: formData.attention,
+        emotionCategory: formData.emotion,
+        mediaSpreadCategory: formData.mediaSpread,
+        formatCategory: formData.format,
+        channelCategory: formData.channel,
+        influenceCategory: formData.influence,
+      });
+      onOpenChange(false);
+    } catch {
+      // 保存失败时保持弹窗打开
+    }
   };
 
   return (

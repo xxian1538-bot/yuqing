@@ -1,6 +1,10 @@
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
-import { deleteRecord, ensureSchema, upsertMany, upsertRecord } from './db';
+import { loadEnv } from './env';
+
+loadEnv();
+
+import { deleteMany, deleteRecord, ensureSchema, getCollectionStats, getMysqlConfig, upsertMany, upsertRecord, waitForMysql } from './db';
 import { loadAppState, seedStateIfEmpty } from './state';
 import { associateSentiments } from '../src/app/utils/sentimentAssociations';
 import type {
@@ -16,7 +20,8 @@ import type {
   WorkflowScene,
 } from '../src/app/types';
 
-const API_PORT = Number(process.env.API_PORT || 3001);
+const API_HOST = process.env.API_HOST || '0.0.0.0';
+const API_PORT = Number(process.env.API_PORT || process.env.PORT || 3001);
 const CURRENT_USER = '舆情管理员';
 
 function nowString() {
@@ -108,9 +113,51 @@ async function handleGetScoringConfig(response: import('node:http').ServerRespon
 }
 
 async function handleAddSentiment(body: any, response: import('node:http').ServerResponse) {
-  const sentiment = body.sentiment as SentimentInfo;
+  const sentiment = body.sentiment as SentimentInfo | undefined;
+  if (!sentiment?.id) {
+    return json(response, 400, { message: 'sentiment.id is required' });
+  }
+
   await upsertRecord('sentiments', sentiment.id, sentiment);
+  json(response, 201, { ok: true, id: sentiment.id });
+}
+
+async function handleDeleteSentiment(sentimentId: string, response: import('node:http').ServerResponse) {
+  const state = await loadAppState();
+  const current = state.sentiments.find((item) => item.id === sentimentId);
+  if (!current) {
+    return notFound(response);
+  }
+
+  await deleteRecord('sentiments', sentimentId);
   json(response, 200, { ok: true });
+}
+
+async function handleDeleteSentiments(body: any, response: import('node:http').ServerResponse) {
+  const ids = Array.isArray(body.ids) ? body.ids.filter((id: unknown) => typeof id === 'string') : [];
+  if (ids.length === 0) {
+    return json(response, 400, { message: 'ids is required' });
+  }
+
+  await deleteMany('sentiments', ids);
+  json(response, 200, { ok: true, deleted: ids.length });
+}
+
+async function handleHealth(response: import('node:http').ServerResponse) {
+  const config = getMysqlConfig();
+  const counts = await getCollectionStats();
+
+  json(response, 200, {
+    ok: true,
+    mysql: {
+      host: config.host,
+      port: config.port,
+      database: config.database,
+      user: config.user,
+    },
+    storage: 'app_records',
+    counts,
+  });
 }
 
 async function handleUpdateSentiment(sentimentId: string, body: any, response: import('node:http').ServerResponse) {
@@ -600,8 +647,14 @@ async function handleUpdateScoringConfig(body: any, response: import('node:http'
 }
 
 async function bootstrap() {
+  await waitForMysql();
   await ensureSchema();
   await seedStateIfEmpty();
+
+  const config = getMysqlConfig();
+  console.log(`MySQL connected: ${config.user}@${config.host}:${config.port}/${config.database}`);
+  console.log('Data table: app_records (collection + id + json data)');
+  console.log(`Mock seed: ${process.env.SEED_MOCK_DATA === 'true' ? 'enabled' : 'disabled'}`);
 
   const server = createServer(async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', '*');
@@ -622,7 +675,7 @@ async function bootstrap() {
 
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        return json(response, 200, { ok: true });
+        return await handleHealth(response);
       }
       if (request.method === 'GET' && url.pathname === '/api/sentiments') {
         return await handleGetSentiments(response);
@@ -638,6 +691,13 @@ async function bootstrap() {
 
       if (request.method === 'POST' && url.pathname === '/api/sentiments') {
         return await handleAddSentiment(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/sentiments/delete') {
+        return await handleDeleteSentiments(body, response);
+      }
+      if (request.method === 'DELETE' && url.pathname.startsWith('/api/sentiments/')) {
+        const sentimentId = decodeURIComponent(url.pathname.replace('/api/sentiments/', ''));
+        return await handleDeleteSentiment(sentimentId, response);
       }
       if (request.method === 'PATCH' && url.pathname.startsWith('/api/sentiments/')) {
         const sentimentId = decodeURIComponent(url.pathname.replace('/api/sentiments/', ''));
@@ -707,8 +767,8 @@ async function bootstrap() {
     }
   });
 
-  server.listen(API_PORT, () => {
-    console.log(`API server listening on http://127.0.0.1:${API_PORT}`);
+  server.listen(API_PORT, API_HOST, () => {
+    console.log(`API server listening on http://${API_HOST}:${API_PORT}`);
   });
 }
 

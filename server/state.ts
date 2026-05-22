@@ -107,41 +107,45 @@ function ensureSceneDefaults(items: WorkflowConfig[]) {
 }
 
 export async function seedStateIfEmpty() {
-  const collections: Array<{ name: CollectionName; items: Array<{ id: string; data: unknown }> }> = [
-    {
-      name: 'sentiments',
-      items: mockSentiments.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-    {
-      name: 'disposal_tasks',
-      items: mockDisposalTasks.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-    {
-      name: 'comment_tasks',
-      items: mockCommentTasks.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-    {
-      name: 'review_requests',
-      items: initialReviewRequests.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-    {
-      name: 'closure_records',
-      items: initialClosureRecords.map((item) => ({ id: item.sentimentId, data: clone(item) })),
-    },
-    {
-      name: 'workflow_configs',
-      items: initialWorkflowConfigs.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-    {
-      name: 'report_records',
-      items: mockReportRecords.map((item) => ({ id: item.id, data: clone(item) })),
-    },
-  ];
+  const seedMock = process.env.SEED_MOCK_DATA === 'true';
 
-  for (const collection of collections) {
-    const count = await countCollection(collection.name);
-    if (count === 0) {
-      await upsertMany(collection.name, collection.items);
+  if (seedMock) {
+    const collections: Array<{ name: CollectionName; items: Array<{ id: string; data: unknown }> }> = [
+      {
+        name: 'sentiments',
+        items: mockSentiments.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+      {
+        name: 'disposal_tasks',
+        items: mockDisposalTasks.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+      {
+        name: 'comment_tasks',
+        items: mockCommentTasks.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+      {
+        name: 'review_requests',
+        items: initialReviewRequests.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+      {
+        name: 'closure_records',
+        items: initialClosureRecords.map((item) => ({ id: item.sentimentId, data: clone(item) })),
+      },
+      {
+        name: 'workflow_configs',
+        items: initialWorkflowConfigs.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+      {
+        name: 'report_records',
+        items: mockReportRecords.map((item) => ({ id: item.id, data: clone(item) })),
+      },
+    ];
+
+    for (const collection of collections) {
+      const count = await countCollection(collection.name);
+      if (count === 0) {
+        await upsertMany(collection.name, collection.items);
+      }
     }
   }
 
