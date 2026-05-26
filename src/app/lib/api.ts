@@ -14,7 +14,7 @@ export interface AssignTaskPayload {
   sentimentId: string;
   sentimentTitle: string;
   sentimentLevel: DisposalTask['level'];
-  taskType: 'disposal' | 'comment';
+  taskType: 'disposal' | 'comment' | 'notification';
   deadline: string;
   assigneeLabel: string;
   assignmentTargets: string[];

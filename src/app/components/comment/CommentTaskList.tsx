@@ -18,6 +18,7 @@ import { CommentTaskDetailDialog } from './CommentTaskDetailDialog';
 import type { CommentTask } from '../../types';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
+import { getDeadlineClassName } from '../../utils/taskDeadline';
 
 export function CommentTaskList() {
   const {
@@ -55,11 +56,17 @@ export function CommentTaskList() {
       '已提交': 'bg-yellow-100 text-yellow-700',
       '已审核': 'bg-green-100 text-green-700',
       '未通过': 'bg-red-100 text-red-700',
+      '已知悉': 'bg-green-100 text-green-700',
+      '已完结': 'bg-purple-100 text-purple-700',
     };
     return <Badge className={styles[status]}>{status}</Badge>;
   };
 
   const filteredTasks = tasks.filter(task => {
+    if (task.taskCategory === 'notification') {
+      return false;
+    }
+
     if (
       searchKeyword &&
       !task.sentimentTitle.toLowerCase().includes(searchKeyword.toLowerCase()) &&
@@ -74,7 +81,7 @@ export function CommentTaskList() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold mb-2">任务列表</h1>
+        <h1 className="text-2xl font-semibold mb-2">网评任务</h1>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
@@ -159,6 +166,7 @@ export function CommentTaskList() {
             <TableRow>
               <TableHead className="w-[350px]">舆情标题</TableHead>
               <TableHead>负责人</TableHead>
+              <TableHead>任务类型</TableHead>
               <TableHead>要求发帖数</TableHead>
               <TableHead>已完成</TableHead>
               <TableHead>状态</TableHead>
@@ -186,18 +194,35 @@ export function CommentTaskList() {
                 </TableCell>
                 <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
                 <TableCell>
-                  <span className="font-medium">{task.requirements.postCount}</span> 条
+                  <Badge variant={task.taskCategory === 'notification' ? 'secondary' : 'outline'}>
+                    {task.taskCategory === 'notification' ? '通知任务' : '网评任务'}
+                  </Badge>
                 </TableCell>
                 <TableCell>
-                  <span className="font-medium text-blue-600">{task.submissions.length}</span> 条
+                  {task.taskCategory === 'notification' ? (
+                    <span className="text-gray-500">无需发帖</span>
+                  ) : (
+                    <>
+                      <span className="font-medium">{task.requirements.postCount}</span> 条
+                    </>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {task.taskCategory === 'notification' ? (
+                    <span className="text-gray-500">{task.status === '已知悉' ? '已确认' : '待确认'}</span>
+                  ) : (
+                    <>
+                      <span className="font-medium text-blue-600">{task.submissions.length}</span> 条
+                    </>
+                  )}
                 </TableCell>
                 <TableCell>{getStatusBadge(task.status)}</TableCell>
-                <TableCell className="text-sm text-gray-600">
+                <TableCell className={`text-sm ${getDeadlineClassName(task.requirements.deadline, ['已完结', '已知悉'].includes(task.status))}`}>
                   {task.requirements.deadline}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {['未接收', '未开始'].includes(task.status) && (
+                    {task.taskCategory !== 'notification' && ['未接收', '未开始'].includes(task.status) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -207,7 +232,7 @@ export function CommentTaskList() {
                         接收
                       </Button>
                     )}
-                    {['已接收', '进行中'].includes(task.status) && (
+                    {task.taskCategory !== 'notification' && ['已接收', '进行中'].includes(task.status) && (
                       <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
                         setCurrentTask(task);
                         setIsExecuteOpen(true);

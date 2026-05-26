@@ -28,7 +28,7 @@ export function CommentTaskDetailDialog({ open, onOpenChange, task }: CommentTas
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[84rem] max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
-          <DialogTitle>网评任务详情</DialogTitle>
+          <DialogTitle>{task.taskCategory === 'notification' ? '通知任务详情' : '网评任务详情'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-4">
@@ -40,6 +40,12 @@ export function CommentTaskDetailDialog({ open, onOpenChange, task }: CommentTas
             <div>
               <span className="text-gray-500 text-sm">负责人：</span>
               <p className="mt-1">{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</p>
+            </div>
+            <div>
+              <span className="text-gray-500 text-sm">任务类型：</span>
+              <p className="mt-1">
+                <Badge variant="outline">{task.taskCategory === 'notification' ? '通知任务' : '网评任务'}</Badge>
+              </p>
             </div>
             <div>
               <span className="text-gray-500 text-sm">状态：</span>

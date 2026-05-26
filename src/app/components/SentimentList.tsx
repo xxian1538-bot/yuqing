@@ -39,6 +39,7 @@ import type { SentimentInfo, SentimentStatus, EmotionTrend } from '../types';
 import { getAssociationGroupIds } from '../utils/sentimentAssociations';
 import { useSentimentData } from '../context/SentimentDataContext';
 import { useTaskWorkflow } from '../context/TaskWorkflowContext';
+import { formatDateTimeLocal } from '../utils/sentimentDeadline';
 
 export function SentimentList() {
   const { sentiments, addSentiment, updateSentiment, deleteSentiments, associateEvents } = useSentimentData();
@@ -58,10 +59,12 @@ export function SentimentList() {
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isClosureOpen, setIsClosureOpen] = useState(false);
+  const [isBatchClosureOpen, setIsBatchClosureOpen] = useState(false);
   const [isSingleAssociateOpen, setIsSingleAssociateOpen] = useState(false);
   const [currentSentiment, setCurrentSentiment] = useState<SentimentInfo | null>(null);
   const [reportSentimentIds, setReportSentimentIds] = useState<string[]>([]);
   const [assignSentimentIds, setAssignSentimentIds] = useState<string[]>([]);
+  const [closureSentimentIds, setClosureSentimentIds] = useState<string[]>([]);
 
   const pageSize = 20;
   const associationGroupIds = getAssociationGroupIds(sentiments, selectedIds);
@@ -149,6 +152,40 @@ export function SentimentList() {
     setIsSingleAssociateOpen(true);
   };
 
+  const getClosureGroup = (sentiment?: SentimentInfo | null) => {
+    if (!sentiment) {
+      return [];
+    }
+
+    return getAssociationGroupIds(sentiments, [sentiment.id])
+      .map((id) => sentiments.find((item) => item.id === id))
+      .filter((item): item is SentimentInfo => Boolean(item));
+  };
+
+  const openManualClosure = (sentiment: SentimentInfo) => {
+    const group = getClosureGroup(sentiment);
+
+    if (group.length > 1) {
+      setCurrentSentiment(sentiment);
+      setClosureSentimentIds(group.map((item) => item.id));
+      setIsBatchClosureOpen(true);
+      return;
+    }
+
+    confirmSentimentClosure(sentiment.id, '列表手动完结');
+  };
+
+  const handleConfirmBatchClosure = () => {
+    closureSentimentIds.forEach((sentimentId) => {
+      confirmSentimentClosure(sentimentId, '关联舆情一键完结');
+    });
+    setIsBatchClosureOpen(false);
+    setClosureSentimentIds([]);
+  };
+
+  const closureDialogSentiment = currentSentiment || sentiments.find((item) => closureSentimentIds.includes(item.id));
+  const closureDialogGroup = getClosureGroup(closureDialogSentiment);
+
   // 获取状态标签样式
   const getStatusBadge = (status: SentimentStatus) => {
     const styles = {
@@ -191,15 +228,15 @@ export function SentimentList() {
   };
 
   return (
-    <div className="p-6">
+    <div className="space-y-5">
       {/* 页面标题 */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold mb-2">舆情展示</h1>
-        
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">舆情展示</h1>
+        <p className="mt-1 text-sm text-slate-500">聚合事件线索、任务状态和报送进展，支持快速筛选、指派与关联。</p>
       </div>
 
       {/* 操作栏 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+      <div className="rounded-3xl border border-white/70 bg-white/68 p-5 shadow-[0_18px_48px_rgba(32,97,165,0.10)] backdrop-blur-2xl">
         <div className="flex items-center gap-3 mb-4">
           <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setIsManualEntryOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -299,33 +336,33 @@ export function SentimentList() {
       </div>
 
       {/* 统计信息 */}
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-sm text-gray-600 mb-1">总舆情数</div>
-          <div className="text-2xl font-semibold">{sentiments.length}</div>
+      <div className="grid grid-cols-4 gap-4">
+        <div className="rounded-3xl border border-white/70 bg-white/65 p-5 shadow-[0_16px_38px_rgba(32,97,165,0.08)] backdrop-blur-2xl">
+          <div className="mb-3 flex items-center gap-2 text-sm text-slate-500"><span className="h-2 w-2 rounded-full bg-blue-500" />总舆情数</div>
+          <div className="text-3xl font-semibold tracking-tight text-slate-950">{sentiments.length}</div>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-sm text-gray-600 mb-1">未处理</div>
-          <div className="text-2xl font-semibold text-red-600">
+        <div className="rounded-3xl border border-white/70 bg-white/65 p-5 shadow-[0_16px_38px_rgba(32,97,165,0.08)] backdrop-blur-2xl">
+          <div className="mb-3 flex items-center gap-2 text-sm text-slate-500"><span className="h-2 w-2 rounded-full bg-rose-500" />未处理</div>
+          <div className="text-3xl font-semibold tracking-tight text-rose-600">
             {sentiments.filter(s => s.status === '未处理').length}
           </div>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-sm text-gray-600 mb-1">跟进中</div>
-          <div className="text-2xl font-semibold text-blue-600">
+        <div className="rounded-3xl border border-white/70 bg-white/65 p-5 shadow-[0_16px_38px_rgba(32,97,165,0.08)] backdrop-blur-2xl">
+          <div className="mb-3 flex items-center gap-2 text-sm text-slate-500"><span className="h-2 w-2 rounded-full bg-sky-500" />跟进中</div>
+          <div className="text-3xl font-semibold tracking-tight text-blue-600">
             {sentiments.filter(s => s.status === '跟进中').length}
           </div>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="text-sm text-gray-600 mb-1">已办结</div>
-          <div className="text-2xl font-semibold text-green-600">
+        <div className="rounded-3xl border border-white/70 bg-white/65 p-5 shadow-[0_16px_38px_rgba(32,97,165,0.08)] backdrop-blur-2xl">
+          <div className="mb-3 flex items-center gap-2 text-sm text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" />已办结</div>
+          <div className="text-3xl font-semibold tracking-tight text-emerald-600">
             {sentiments.filter(s => s.status === '已办结').length}
           </div>
         </div>
       </div>
 
       {/* 表格 */}
-      <div className="bg-white rounded-lg border border-gray-200">
+      <div className="overflow-hidden rounded-3xl border border-white/70 bg-white/70 shadow-[0_22px_60px_rgba(32,97,165,0.10)] backdrop-blur-2xl">
         <Table>
           <TableHeader>
             <TableRow>
@@ -339,7 +376,8 @@ export function SentimentList() {
               <TableHead className="min-w-[80px]">事件等级</TableHead>
               <TableHead className="min-w-[80px]">报送状态</TableHead>
               <TableHead className="min-w-[80px]">任务状态</TableHead>
-              <TableHead className="min-w-[100px]">时间</TableHead>
+              <TableHead className="min-w-[100px]">处理截止时间</TableHead>
+              <TableHead className="min-w-[100px]">入库时间</TableHead>
               <TableHead className="min-w-[80px]">来源平台</TableHead>
               <TableHead className="min-w-[150px] max-w-[250px]">内容</TableHead>
               <TableHead className="min-w-[120px] max-w-[200px]">研判建议</TableHead>
@@ -391,7 +429,10 @@ export function SentimentList() {
                 </TableCell>
                 <TableCell>{getTaskStatusBadge(sentiment.id)}</TableCell>
                 <TableCell>
-                  <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.publishTime}</div>
+                  <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.deadline || sentiment.publishTime}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.createdAt || sentiment.publishTime}</div>
                 </TableCell>
                 <TableCell>
                   <div className="text-sm">{sentiment.source}</div>
@@ -462,7 +503,7 @@ export function SentimentList() {
                         variant="ghost"
                         size="sm"
                         className="text-green-600"
-                        onClick={() => confirmSentimentClosure(sentiment.id, '列表手动完结')}
+                        onClick={() => openManualClosure(sentiment)}
                       >
                         手动完结
                       </Button>
@@ -488,7 +529,7 @@ export function SentimentList() {
         </Table>
 
         {/* 分页 */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+        <div className="flex items-center justify-between border-t border-slate-200/60 px-6 py-4">
           <div className="text-sm text-gray-600">
             共 {filteredSentiments.length} 条，第 {currentPage} / {totalPages} 页
           </div>
@@ -537,7 +578,9 @@ export function SentimentList() {
             id: String(Date.now()),
             title: data.title || '无标题',
             source: data.source || '未知',
-            publishTime: data.publishTime || new Date().toISOString(),
+            publishTime: new Date().toISOString(),
+            createdAt: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+            deadline: formatDateTimeLocal(data.deadline || new Date().toISOString()),
             content: data.title || '',
             summary: data.summary || '',
             channel: data.source || '未知',
@@ -641,6 +684,58 @@ export function SentimentList() {
             </Button>
             <Button onClick={handleAssociate} disabled={!primaryEventId}>
               确认关联
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBatchClosureOpen} onOpenChange={setIsBatchClosureOpen}>
+        <DialogContent className="sm:max-w-[54rem] bg-white">
+          <DialogHeader>
+            <DialogTitle>关联舆情一键完结</DialogTitle>
+            <DialogDescription>
+              当前舆情已关联其他事件，系统已自动勾选全部关联舆情。确认后将同步置为已办结。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[360px] space-y-2 overflow-y-auto pr-2">
+            {closureDialogGroup.map((sentiment) => (
+              <Label
+                key={sentiment.id}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white/70 p-3 hover:bg-blue-50/60"
+              >
+                <Checkbox
+                  checked={closureSentimentIds.includes(sentiment.id)}
+                  onCheckedChange={(checked) => {
+                    setClosureSentimentIds((current) => (
+                      checked
+                        ? Array.from(new Set([...current, sentiment.id]))
+                        : current.filter((id) => id !== sentiment.id)
+                    ));
+                  }}
+                  className="mt-1"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="line-clamp-2 font-medium text-slate-900">
+                    {sentiment.title}
+                    {sentiment.id === (currentSentiment?.primaryEventId || currentSentiment?.id) ? (
+                      <span className="ml-2 text-xs text-blue-600">主事件</span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    截止：{sentiment.deadline || sentiment.publishTime} · {sentiment.source}
+                  </div>
+                </div>
+              </Label>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBatchClosureOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleConfirmBatchClosure} disabled={closureSentimentIds.length === 0}>
+              完结已选 {closureSentimentIds.length} 条舆情
             </Button>
           </DialogFooter>
         </DialogContent>

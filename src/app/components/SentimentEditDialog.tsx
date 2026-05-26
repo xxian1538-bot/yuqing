@@ -14,6 +14,7 @@ import {
   sourceOptions,
   topicOptions,
 } from '../lib/sentimentScoring';
+import { getDeadlineRuleText, getPresetDeadline, toDateTimeLocalValue } from '../utils/sentimentDeadline';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -28,27 +29,6 @@ interface SentimentEditDialogProps {
   onSubmit: (updates: Partial<SentimentInfo>) => void | Promise<void>;
 }
 
-function toDateTimeLocalValue(value: string) {
-  if (!value) {
-    return '';
-  }
-
-  const normalized = value.replace(' ', 'T');
-
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) {
-    return normalized;
-  }
-
-  const date = new Date(normalized);
-
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return offsetDate.toISOString().slice(0, 16);
-}
-
 export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }: SentimentEditDialogProps) {
   const { weights } = useScoringConfig();
   const [formData, setFormData] = useState({
@@ -56,7 +36,7 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
     summary: '',
     content: '',
     source: '',
-    publishTime: '',
+    deadline: '',
     analysis: '',
     link: '',
     readCount: '',
@@ -85,7 +65,7 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
       summary: sentiment.summary,
       content: sentiment.content,
       source: sentiment.source,
-      publishTime: toDateTimeLocalValue(sentiment.publishTime),
+      deadline: toDateTimeLocalValue(sentiment.deadline || sentiment.publishTime),
       analysis: sentiment.analysis,
       link: sentiment.link,
       readCount: String(sentiment.readCount ?? 0),
@@ -127,6 +107,10 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
     const { level, score } = calculateSentimentLevel(formData, weights);
     setCalculatedLevel(level);
     setCalculatedScore(score);
+    setFormData((current) => ({
+      ...current,
+      deadline: getPresetDeadline(level),
+    }));
   };
 
   const handleSubmit = async () => {
@@ -136,7 +120,7 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
         summary: formData.summary,
         content: formData.content,
         source: formData.source,
-        publishTime: formData.publishTime,
+        deadline: formData.deadline.replace('T', ' '),
         analysis: formData.analysis,
         link: formData.link,
         readCount: parseInt(formData.readCount, 10) || 0,
@@ -198,12 +182,13 @@ export function SentimentEditDialog({ open, onOpenChange, sentiment, onSubmit }:
               </div>
 
               <div className="space-y-2">
-                <Label>发帖时间</Label>
+                <Label>处理截止时间</Label>
                 <Input
                   type="datetime-local"
-                  value={formData.publishTime}
-                  onChange={(e) => setFormData({ ...formData, publishTime: e.target.value })}
+                  value={formData.deadline}
+                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                 />
+                <div className="text-xs text-gray-500">{getDeadlineRuleText(calculatedLevel)}</div>
               </div>
 
               <div className="space-y-2 md:col-span-2">

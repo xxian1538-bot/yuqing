@@ -1,14 +1,14 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
-import { 
-  Home, 
-  ClipboardList, 
+import {
+  Home,
+  ClipboardList,
   Bell,
   User,
   Settings,
   ShieldCheck,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
 } from 'lucide-react';
 import { Badge } from './ui/badge';
 
@@ -47,6 +47,7 @@ export function Layout() {
       subItems: [
         { path: '/disposal/tasks', label: '处置任务' },
         { path: '/comment-tasks/list', label: '网评任务' },
+        { path: '/comment-tasks/notifications', label: '通知任务' },
       ]
     },
     {
@@ -99,20 +100,26 @@ export function Layout() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="ai-workspace flex h-screen overflow-hidden bg-gray-50 text-slate-800">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-24 top-[-18rem] h-[34rem] w-[34rem] rounded-full bg-cyan-200/45 blur-3xl" />
+        <div className="absolute right-[18%] top-[-14rem] h-[30rem] w-[30rem] rounded-full bg-blue-300/35 blur-3xl" />
+        <div className="absolute bottom-[-18rem] right-[-12rem] h-[38rem] w-[38rem] rounded-full bg-sky-100/80 blur-3xl" />
+      </div>
+
       {/* 左侧导航栏 */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <aside className="relative z-10 flex h-screen w-56 flex-col border-r border-white/60 bg-white/45 shadow-[18px_0_55px_rgba(32,97,165,0.08)] backdrop-blur-2xl">
         {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <img src="/images/logo.png" alt="数智全媒产品平台" className="h-8 object-contain" />
+        <div className="h-[86px] flex items-center px-4 border-b border-white/60">
+          <div className="flex min-w-0 items-center">
+            <img src="/images/logo.png" alt="数智全媒产品平台" className="h-8 max-w-[188px] object-contain" />
           </div>
         </div>
 
 
         {/* 导航菜单 */}
-        <nav className="flex-1 overflow-y-auto px-3 py-6">
-          <div className="space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 py-5">
+          <div className="space-y-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = isMenuActive(item);
@@ -125,15 +132,15 @@ export function Layout() {
                   {hasSubItems ? (
                     <button
                       onClick={() => toggleMenu(item.path, item.subItems![0].path)}
-                      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl transition-all ${
                         isActive
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'bg-white/80 text-blue-700 shadow-[0_10px_26px_rgba(37,99,235,0.10)] ring-1 ring-blue-100'
+                          : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className="w-5 h-5" />
-                        <span>{item.label}</span>
+                        <Icon className="w-4 h-4" />
+                        <span className="text-sm font-semibold">{item.label}</span>
                       </div>
                       {isExpanded ? (
                         <ChevronDown className="w-4 h-4" />
@@ -144,28 +151,28 @@ export function Layout() {
                   ) : (
                     <Link
                       to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all ${
                         isActive
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'text-gray-700 hover:bg-gray-50'
+                          ? 'bg-white/80 text-blue-700 shadow-[0_10px_26px_rgba(37,99,235,0.10)] ring-1 ring-blue-100'
+                          : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
                       }`}
                     >
-                      <Icon className="w-5 h-5" />
-                      <span>{item.label}</span>
+                      <Icon className="w-4 h-4" />
+                      <span className="text-sm font-semibold">{item.label}</span>
                     </Link>
                   )}
 
                   {/* 子菜单项 */}
                   {hasSubItems && isExpanded && (
-                    <div className="ml-8 mt-1 space-y-1">
+                    <div className="ml-3 mt-2 space-y-1 border-l border-blue-100/80 pl-3">
                       {item.subItems!.map((subItem) => (
                         <Link
                           key={subItem.path}
                           to={subItem.path}
-                          className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          className={`block px-3 py-2 rounded-xl text-sm transition-all ${
                             isSubItemActive(subItem.path)
-                              ? 'bg-blue-50 text-blue-600 font-medium'
-                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                              ? 'bg-blue-600 text-white font-medium shadow-[0_10px_18px_rgba(37,99,235,0.18)]'
+                              : 'text-slate-500 hover:bg-white/55 hover:text-slate-900'
                           }`}
                         >
                           {subItem.label}
@@ -178,42 +185,40 @@ export function Layout() {
             })}
           </div>
         </nav>
-
       </aside>
 
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
         {/* 顶部栏 */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-end px-6">
-          
-          <div className="flex items-center gap-6">
+        <header className="h-[86px] border-b border-white/60 bg-white/35 backdrop-blur-2xl flex items-center justify-end px-8">
+          <div className="flex items-center gap-5">
             <div className="flex items-center gap-4">
-              <button className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <Bell className="w-5 h-5 text-gray-600" />
-                <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+              <button className="relative rounded-2xl border border-white/70 bg-white/65 p-2.5 shadow-sm transition-all hover:bg-white/90">
+                <Bell className="w-5 h-5 text-slate-600" />
+                <Badge className="absolute -top-1.5 -right-1.5 w-5 h-5 p-0 flex items-center justify-center border-0 bg-rose-500 text-white text-xs before:hidden">
                   3
                 </Badge>
               </button>
-              <div className="text-sm text-gray-600">
+              <div className="hidden max-w-[260px] truncate rounded-full border border-white/65 bg-white/55 px-3 py-2 text-sm text-slate-600 2xl:block">
                 CCBN2025年4月22日至25日在北京...
               </div>
             </div>
 
             {/* 用户信息 */}
-            <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-gray-600" />
+            <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-sm">
+              <div className="w-9 h-9 bg-gradient-to-br from-slate-800 to-blue-600 rounded-2xl flex items-center justify-center">
+                <User className="w-4 h-4 text-white" />
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="font-medium text-sm leading-tight">舆情管理员</span>
-                <span className="text-xs text-gray-500">admin@system.com</span>
+                <span className="font-semibold text-sm leading-tight text-slate-900">舆情管理员</span>
+                <span className="text-xs text-slate-500">admin@system.com</span>
               </div>
             </div>
           </div>
         </header>
 
         {/* 页面内容 */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto px-8 py-7">
           <Outlet />
         </main>
       </div>

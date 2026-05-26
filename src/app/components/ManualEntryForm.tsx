@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -19,6 +19,7 @@ import {
   sourceOptions,
   topicOptions,
 } from "../lib/sentimentScoring";
+import { getDeadlineRuleText, getPresetDeadline } from "../utils/sentimentDeadline";
 
 interface ManualEntryFormProps {
   open: boolean;
@@ -32,7 +33,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
     title: "",
     link: "",
     summary: "", // 研判建议
-    publishTime: "",
+    deadline: getPresetDeadline("轻微"),
     source: "", // 来源平台
     readCount: "",
     likeCount: "",
@@ -53,6 +54,15 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
   const [calculatedLevel, setCalculatedLevel] = useState<SentimentLevel | null>(null);
   const [calculatedScore, setCalculatedScore] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setFormData((current) => ({
+        ...current,
+        deadline: current.deadline || getPresetDeadline("轻微"),
+      }));
+    }
+  }, [open]);
+
   const dimensionScores = {
     topic: getOptionScore(topicOptions, formData.topic),
     attention: getOptionScore(attentionOptions, formData.attention),
@@ -67,6 +77,10 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
     const { level, score } = calculateSentimentLevel(formData, weights);
     setCalculatedLevel(level);
     setCalculatedScore(score);
+    setFormData((current) => ({
+      ...current,
+      deadline: getPresetDeadline(level),
+    }));
   };
 
   const handleSubmit = async () => {
@@ -125,8 +139,11 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>发帖时间</Label>
-                <Input type="datetime-local" value={formData.publishTime} onChange={e => setFormData({...formData, publishTime: e.target.value})} />
+                <Label>处理截止时间</Label>
+                <Input type="datetime-local" value={formData.deadline} onChange={e => setFormData({...formData, deadline: e.target.value})} />
+                <div className="text-xs text-gray-500">
+                  {getDeadlineRuleText(calculatedLevel || "轻微")}
+                </div>
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>互动量数据</Label>

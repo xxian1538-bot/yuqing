@@ -28,6 +28,10 @@ function nowString() {
   return new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
 }
 
+function uniqueId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function json(response: import('node:http').ServerResponse, status: number, payload: unknown) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -118,7 +122,10 @@ async function handleAddSentiment(body: any, response: import('node:http').Serve
     return json(response, 400, { message: 'sentiment.id is required' });
   }
 
-  await upsertRecord('sentiments', sentiment.id, sentiment);
+  await upsertRecord('sentiments', sentiment.id, {
+    ...sentiment,
+    createdAt: sentiment.createdAt || nowString(),
+  });
   json(response, 201, { ok: true, id: sentiment.id });
 }
 
@@ -227,7 +234,7 @@ async function handleAssignTask(body: any, response: import('node:http').ServerR
     sentimentId: string;
     sentimentTitle: string;
     sentimentLevel: DisposalTask['level'];
-    taskType: 'disposal' | 'comment';
+    taskType: 'disposal' | 'comment' | 'notification';
     deadline: string;
     assigneeLabel: string;
     assignmentTargets: string[];
@@ -240,7 +247,7 @@ async function handleAssignTask(body: any, response: import('node:http').ServerR
 
   if (payload.taskType === 'disposal') {
     const task: DisposalTask = {
-      id: `disposal-${Date.now()}`,
+      id: uniqueId('disposal'),
       sentimentId: payload.sentimentId,
       sentimentTitle: payload.sentimentTitle,
       level: payload.sentimentLevel,
@@ -259,12 +266,15 @@ async function handleAssignTask(body: any, response: import('node:http').ServerR
     await upsertRecord('disposal_tasks', task.id, task);
   } else {
     const task: CommentTask = {
-      id: `comment-${Date.now()}`,
+      id: uniqueId(payload.taskType === 'notification' ? 'notification' : 'comment'),
+      taskCategory: payload.taskType === 'notification' ? 'notification' : 'comment',
       sentimentId: payload.sentimentId,
       sentimentTitle: payload.sentimentTitle,
-      goal: payload.contentDirection || '配合当前舆情处置开展舆论引导',
+      goal: payload.taskType === 'notification'
+        ? (payload.contentDirection || '请知悉当前舆情处置要求')
+        : (payload.contentDirection || '配合当前舆情处置开展舆论引导'),
       requirements: {
-        postCount: payload.postCount || 1,
+        postCount: payload.taskType === 'notification' ? 0 : (payload.postCount || 1),
         platforms: payload.platforms || [],
         contentDirection: payload.contentDirection || '',
         deadline: payload.deadline,
@@ -413,7 +423,7 @@ async function handleSubmitComment(body: any, response: import('node:http').Serv
     };
 
     if (!submitForReview) {
-      nextTask.status = '进行中';
+      nextTask.status = item.taskCategory === 'notification' ? '已完结' : '进行中';
       return nextTask;
     }
 
@@ -487,7 +497,7 @@ async function handleApproveReview(body: any, response: import('node:http').Serv
       item.id === review.taskId
         ? {
             ...item,
-            status: '已审核' as const,
+            status: '已完结' as const,
             reviewComment: comment,
             updatedAt: nowString(),
           }

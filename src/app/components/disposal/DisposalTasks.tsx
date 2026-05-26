@@ -18,6 +18,7 @@ import { CreateDisposalTask } from './CreateDisposalTask';
 import type { DisposalTask } from '../../types';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
+import { getDeadlineClassName } from '../../utils/taskDeadline';
 
 export function DisposalTasks() {
   const {
@@ -202,7 +203,7 @@ export function DisposalTasks() {
                 <TableCell className="text-sm text-gray-600">
                   {task.createdAt}
                 </TableCell>
-                <TableCell className="text-sm text-gray-600">
+                <TableCell className={`text-sm ${getDeadlineClassName(task.deadline, task.status === '已完结')}`}>
                   {task.deadline}
                 </TableCell>
                 <TableCell className="text-right">

@@ -12,6 +12,7 @@ import type { DisposalTask, SentimentLevel } from '../../types';
 import { assignmentTargetGroups, getAssignmentTargetLabel } from '../../utils/assignmentTargets';
 import { useSentimentData } from '../../context/SentimentDataContext';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
+import { getPresetDeadline } from '../../utils/sentimentDeadline';
 
 interface CreateDisposalTaskProps {
   open: boolean;
@@ -28,7 +29,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
   const [referenceEventIds, setReferenceEventIds] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     level: '一般' as SentimentLevel,
-    deadline: '',
+    deadline: getPresetDeadline('一般'),
     measures: '',
   });
   const { sentiments } = useSentimentData();
@@ -92,7 +93,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
     // Reset form
     setFormData({
       level: '一般',
-      deadline: '',
+      deadline: getPresetDeadline('一般'),
       measures: '',
     });
     setSelectedSentimentId('');
@@ -106,7 +107,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
       setReferenceEventIds([]);
       setFormData({
         level: '一般',
-        deadline: '',
+        deadline: getPresetDeadline('一般'),
         measures: '',
       });
       setSelectedSentimentId('');
@@ -150,7 +151,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>舆情等级</Label>
-                <Select value={formData.level} onValueChange={(v: SentimentLevel) => setFormData({...formData, level: v})}>
+                <Select value={formData.level} onValueChange={(v: SentimentLevel) => setFormData({...formData, level: v, deadline: getPresetDeadline(v)})}>
                   <SelectTrigger><SelectValue placeholder="选择等级" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="轻微">轻微</SelectItem>
@@ -233,7 +234,7 @@ export function CreateDisposalTask({ open, onOpenChange, onSubmit }: CreateDispo
         onConfirm={(sentiment) => {
           setSelectedSentimentId(sentiment?.id || '');
           if (sentiment) {
-            setFormData((prev) => ({ ...prev, level: sentiment.level }));
+            setFormData((prev) => ({ ...prev, level: sentiment.level, deadline: getPresetDeadline(sentiment.level) }));
           }
         }}
       />

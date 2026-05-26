@@ -45,7 +45,7 @@ function safeFileName(value: string) {
 export function SentimentDetail() {
   const { id } = useParams();
   const { sentiments, updateSentiment } = useSentimentData();
-  const { disposalTasks, commentTasks, getSentimentTaskStatusById, confirmSentimentClosure, getClosureRecordBySentimentId } = useTaskWorkflow();
+  const { disposalTasks, commentTasks, reviewRequests, getSentimentTaskStatusById, confirmSentimentClosure, getClosureRecordBySentimentId } = useTaskWorkflow();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isClosureOpen, setIsClosureOpen] = useState(false);
@@ -78,6 +78,55 @@ export function SentimentDetail() {
   const relatedDisposalTasks = disposalTasks.filter((task) => task.sentimentId === sentiment.id);
   const relatedCommentTasks = commentTasks.filter((task) => task.sentimentId === sentiment.id);
   const closureRecord = getClosureRecordBySentimentId(sentiment.id);
+
+  const getLatestDisposalOperation = (task: (typeof relatedDisposalTasks)[number]) => {
+    const latestReview = reviewRequests
+      .filter((item) => item.taskType === 'disposal' && item.taskId === task.id)
+      .sort((a, b) => new Date(b.reviewedAt || b.submittedAt).getTime() - new Date(a.reviewedAt || a.submittedAt).getTime())[0];
+
+    if (latestReview?.reviewedAt) {
+      return `${latestReview.reviewer || '审核员'} ${latestReview.status}：${latestReview.comment || latestReview.summary}`;
+    }
+
+    if (latestReview) {
+      return `${latestReview.requester} 提交审核：${latestReview.summary}`;
+    }
+
+    if (task.completedAt) {
+      return `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)} 完成执行：${task.result || task.progress || '已提交执行材料'}`;
+    }
+
+    return `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)} ${task.status}：${task.progress || task.measures || '任务已下发'}`;
+  };
+
+  const getLatestCommentOperation = (task: (typeof relatedCommentTasks)[number]) => {
+    const latestReview = reviewRequests
+      .filter((item) => item.taskType === 'comment' && item.taskId === task.id)
+      .sort((a, b) => new Date(b.reviewedAt || b.submittedAt).getTime() - new Date(a.reviewedAt || a.submittedAt).getTime())[0];
+
+    if (task.taskCategory === 'notification') {
+      const latestSubmission = [...task.submissions].sort((a, b) => new Date(b.postTime).getTime() - new Date(a.postTime).getTime())[0];
+      if (latestSubmission) {
+        return `${latestSubmission.account || getAssignmentDisplayName(task.assignmentTargets, task.assignee)} 确认知悉：${latestSubmission.summary || latestSubmission.content}`;
+      }
+      return `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)} ${task.status}：等待确认知悉`;
+    }
+
+    if (latestReview?.reviewedAt) {
+      return `${latestReview.reviewer || '审核员'} ${latestReview.status}：${latestReview.comment || latestReview.summary}`;
+    }
+
+    if (latestReview) {
+      return `${latestReview.requester} 提交审核：${latestReview.summary}`;
+    }
+
+    const latestSubmission = [...task.submissions].sort((a, b) => new Date(b.postTime).getTime() - new Date(a.postTime).getTime())[0];
+    if (latestSubmission) {
+      return `${latestSubmission.account || getAssignmentDisplayName(task.assignmentTargets, task.assignee)} 提交执行材料：${latestSubmission.summary || latestSubmission.content}`;
+    }
+
+    return `${getAssignmentDisplayName(task.assignmentTargets, task.assignee)} ${task.status}：${task.goal}`;
+  };
 
   // 获取状态标签样式
   const getStatusBadge = (status: SentimentStatus) => {
@@ -127,7 +176,7 @@ export function SentimentDetail() {
       ['任务状态', taskStatus],
       ['情感倾向', sentiment.emotionTrend],
       ['来源平台', sentiment.source],
-      ['发布时间', sentiment.publishTime],
+      ['处理截止时间', sentiment.deadline || sentiment.publishTime],
       ['领域', sentiment.field],
       ['单位', sentiment.unit],
       ['原文链接', sentiment.link],
@@ -162,7 +211,7 @@ export function SentimentDetail() {
             <td>${escapeHtml(task.status)}</td>
             <td>${escapeHtml(task.requirements.deadline)}</td>
             <td>${escapeHtml(task.goal)}</td>
-            <td>${escapeHtml(`${task.submissions.length}/${task.requirements.postCount}`)}</td>
+            <td>${escapeHtml(task.taskCategory === 'notification' ? (task.status === '已知悉' ? '已确认知悉' : '待确认知悉') : `${task.submissions.length}/${task.requirements.postCount}`)}</td>
           </tr>
         `).join('')
       : '<tr><td colspan="6">暂无网评任务</td></tr>';
@@ -218,7 +267,7 @@ export function SentimentDetail() {
             ${renderDisposalTasks}
           </table>
 
-          <h2>网评任务</h2>
+          <h2>网评 / 通知任务</h2>
           <table>
             <tr><th>序号</th><th>处理对象</th><th>状态</th><th>截止时间</th><th>任务目标</th><th>完成进度</th></tr>
             ${renderCommentTasks}
@@ -283,7 +332,7 @@ export function SentimentDetail() {
             <h1 className="text-2xl font-semibold mb-4">{sentiment.title}</h1>
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
               <div>来源：{sentiment.source}</div>
-              <div>发布时间：{sentiment.publishTime}</div>
+              <div>处理截止：{sentiment.deadline || sentiment.publishTime}</div>
               <div>领域：{sentiment.field}</div>
               <div>单位：{sentiment.unit}</div>
               {sentiment.assignee && <div>负责人：{sentiment.assignee}</div>}
@@ -394,9 +443,9 @@ export function SentimentDetail() {
       <Tabs defaultValue="process" className="bg-white rounded-lg border border-gray-200">
         <div className="px-6 pt-4">
           <TabsList>
-            <TabsTrigger value="process">全景链路视图</TabsTrigger>
+            <TabsTrigger value="process">任务看板</TabsTrigger>
             {hasRelatedEvents && <TabsTrigger value="timeline">舆情事件脉络</TabsTrigger>}
-            <TabsTrigger value="disposal">处置记录</TabsTrigger>
+            <TabsTrigger value="disposal">执行记录</TabsTrigger>
             <TabsTrigger value="evaluation">处置过程自动评价</TabsTrigger>
           </TabsList>
         </div>
@@ -462,7 +511,7 @@ export function SentimentDetail() {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>任务流转概览</CardTitle>
+                    <CardTitle>执行流转概览</CardTitle>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-3">
                     <div className="rounded-md bg-gray-50 p-4">
@@ -470,7 +519,7 @@ export function SentimentDetail() {
                       <div className="mt-2 text-2xl font-semibold">{relatedDisposalTasks.length}</div>
                     </div>
                     <div className="rounded-md bg-gray-50 p-4">
-                      <div className="text-sm text-gray-500">网评任务</div>
+                      <div className="text-sm text-gray-500">网评 / 通知任务</div>
                       <div className="mt-2 text-2xl font-semibold">{relatedCommentTasks.length}</div>
                     </div>
                     <div className="rounded-md bg-gray-50 p-4">
@@ -483,7 +532,7 @@ export function SentimentDetail() {
                 {relatedDisposalTasks.length > 0 ? (
                   <Card>
                     <CardHeader>
-                      <CardTitle>处置任务记录</CardTitle>
+                      <CardTitle>处置任务执行记录</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {relatedDisposalTasks.map((task) => (
@@ -493,6 +542,10 @@ export function SentimentDetail() {
                             <Badge variant="outline">{task.status}</Badge>
                           </div>
                           <div className="text-sm text-gray-600">{task.progress || task.measures}</div>
+                          <div className="mt-3 rounded-md bg-blue-50 p-3 text-sm text-gray-700">
+                            <span className="font-medium text-blue-700">最新操作：</span>
+                            {getLatestDisposalOperation(task)}
+                          </div>
                           <div className="mt-2 text-xs text-gray-500">
                             创建时间：{task.createdAt} · 截止时间：{task.deadline}
                           </div>
@@ -510,18 +563,28 @@ export function SentimentDetail() {
                 {relatedCommentTasks.length > 0 ? (
                   <Card>
                     <CardHeader>
-                      <CardTitle>网评任务记录</CardTitle>
+                      <CardTitle>网评 / 通知任务执行记录</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {relatedCommentTasks.map((task) => (
                         <div key={task.id} className="rounded-md border border-gray-200 p-4">
                           <div className="mb-2 flex items-center justify-between gap-3">
                             <div className="font-medium text-gray-900">{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</div>
-                            <Badge variant="outline">{task.status}</Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{task.taskCategory === 'notification' ? '通知任务' : '网评任务'}</Badge>
+                              <Badge variant="outline">{task.status}</Badge>
+                            </div>
                           </div>
                           <div className="text-sm text-gray-600">{task.goal}</div>
+                          <div className="mt-3 rounded-md bg-blue-50 p-3 text-sm text-gray-700">
+                            <span className="font-medium text-blue-700">最新操作：</span>
+                            {getLatestCommentOperation(task)}
+                          </div>
                           <div className="mt-2 text-xs text-gray-500">
-                            发帖 {task.submissions.length}/{task.requirements.postCount} · 截止时间：{task.requirements.deadline}
+                            {task.taskCategory === 'notification'
+                              ? `确认记录 ${task.submissions.length > 0 ? '已确认' : '待确认'}`
+                              : `发帖 ${task.submissions.length}/${task.requirements.postCount}`}
+                            {' '}· 截止时间：{task.requirements.deadline}
                           </div>
                           {task.reviewWorkflowName ? (
                             <div className="mt-2 text-xs text-gray-500">审核流：{task.reviewWorkflowName}</div>
@@ -550,7 +613,7 @@ export function SentimentDetail() {
               </>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                暂无处置记录
+                暂无执行记录
               </div>
             )}
           </div>

@@ -1,30 +1,37 @@
-# 构建前端
+# syntax=docker/dockerfile:1.7
+# 启用 BuildKit 构建：$env:DOCKER_BUILDKIT=1; docker build -t yuqing:latest .
+
+# ---------- 阶段1：只构建前端（改 server 代码不会重做 npm ci + vite）----------
 FROM cmc-tcr.tencentcloudcr.com/panda/node:20 AS builder
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci
 
-COPY . .
+COPY index.html vite.config.ts postcss.config.mjs ./
+COPY src ./src
 RUN npm run build
 
-# 运行：Nginx + API，数据库连接由 docker run -e / --env-file 注入
-FROM cmc-tcr.tencentcloudcr.com/panda/node:20 AS runner
+# ---------- 阶段2：运行（基于 nginx 镜像，不再 apt-get 装 nginx）----------
+FROM nginx:1.27-alpine AS runner
+
+# nginx 已内置；用 apk 装 Node，通常几秒完成，且该层可长期缓存
+RUN apk add --no-cache nodejs npm
 
 WORKDIR /app
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends nginx \
-  && rm -rf /var/lib/apt/lists/*
-
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm install -g tsx
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --omit=dev \
+ && npm install -g tsx
 
 COPY server ./server
-COPY src ./src
-COPY docker/start.sh ./docker/start.sh
-RUN sed -i 's/\r$//' /app/docker/start.sh && chmod +x /app/docker/start.sh
+COPY src/app/types ./src/app/types
+COPY src/app/utils ./src/app/utils
+COPY src/app/data ./src/app/data
+
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
@@ -36,5 +43,4 @@ ENV SEED_MOCK_DATA=false
 
 EXPOSE 8080
 
-# 避免 Windows CRLF 导致 start.sh 中 set -e 报错
 CMD ["sh", "-c", "cd /app && npx tsx server/index.ts & exec nginx -g 'daemon off;'"]

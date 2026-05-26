@@ -17,11 +17,12 @@ interface TaskWorkflowContextValue {
   reviewRequests: ReviewRequest[];
   closureRecords: SentimentClosureRecord[];
   workflowConfigs: WorkflowConfig[];
-  createAssignedTask: (payload: AssignTaskPayload) => void;
+  createAssignedTask: (payload: AssignTaskPayload) => Promise<void>;
   createDisposalTask: (task: DisposalTask) => void;
   createCommentTask: (task: CommentTask) => void;
   acceptDisposalTask: (taskId: string) => void;
   acceptCommentTask: (taskId: string) => void;
+  confirmNotificationTask: (taskId: string) => void;
   submitDisposalForReview: (payload: SubmitDisposalPayload) => void;
   submitCommentExecution: (payload: SubmitCommentPayload) => void;
   approveReview: (reviewId: string, comment: string) => void;
@@ -62,15 +63,13 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
     void loadTaskWorkflow();
   }, []);
 
-  const createAssignedTask = (payload: AssignTaskPayload) => {
-    void (async () => {
-      try {
-        await appApi.createAssignedTask(payload);
-        await Promise.all([loadTaskWorkflow(), Promise.resolve(refreshSentiments())]);
-      } catch (error) {
-        console.error('Failed to create assigned task', error);
-      }
-    })();
+  const createAssignedTask = async (payload: AssignTaskPayload) => {
+    try {
+      await appApi.createAssignedTask(payload);
+      await Promise.all([loadTaskWorkflow(), Promise.resolve(refreshSentiments())]);
+    } catch (error) {
+      console.error('Failed to create assigned task', error);
+    }
   };
 
   const acceptDisposalTask = (taskId: string) => {
@@ -91,6 +90,36 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
         await loadTaskWorkflow();
       } catch (error) {
         console.error('Failed to accept comment task', error);
+      }
+    })();
+  };
+
+  const confirmNotificationTask = (taskId: string) => {
+    void (async () => {
+      try {
+        await appApi.submitCommentExecution({
+          taskId,
+          submission: {
+            id: `notice-${Date.now()}`,
+            title: '确认知悉',
+            account: '当前用户',
+            screenshot: '',
+            link: '',
+            content: '已确认知悉通知任务',
+            platform: '系统通知',
+            postTime: new Date().toISOString(),
+            readCount: 0,
+            likeCount: 0,
+            shareCount: 0,
+            commentCount: 0,
+            collectCount: 0,
+            summary: '已确认知悉',
+          },
+          submitForReview: false,
+        });
+        await loadTaskWorkflow();
+      } catch (error) {
+        console.error('Failed to confirm notification task', error);
       }
     })();
   };
@@ -235,6 +264,7 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
     },
     acceptDisposalTask,
     acceptCommentTask,
+    confirmNotificationTask,
     submitDisposalForReview,
     submitCommentExecution,
     approveReview,

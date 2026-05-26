@@ -12,6 +12,7 @@ import { ReferenceCasePickerDialog } from './ReferenceCasePickerDialog';
 import { TargetOptionGroup, TargetPickerDialog } from './TargetPickerDialog';
 import type { SentimentLevel } from '../types';
 import { assignmentTargetGroups, getAssignmentTargetLabel } from '../utils/assignmentTargets';
+import { getPresetDeadline } from '../utils/sentimentDeadline';
 
 interface AssignDialogProps {
   open: boolean;
@@ -26,13 +27,32 @@ const targetGroups: TargetOptionGroup[] = assignmentTargetGroups.map((group) => 
   options: [...group.options],
 }));
 
+type AssignTaskType = 'disposal' | 'comment' | 'notification';
+
+interface TaskDraft {
+  id: string;
+  taskType: AssignTaskType;
+  deadline: string;
+  measures: string;
+  postCount: string;
+  platforms: string;
+  contentDirection: string;
+}
+
+function createTaskDraft(level?: SentimentLevel | string): TaskDraft {
+  return {
+    id: `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    taskType: 'disposal',
+    deadline: getPresetDeadline((level as SentimentLevel) || '一般'),
+    measures: '',
+    postCount: '',
+    platforms: '',
+    contentDirection: '',
+  };
+}
+
 export function AssignDialog({ open, onOpenChange, sentimentIds, sentimentLevel }: AssignDialogProps) {
-  const [taskType, setTaskType] = useState<'disposal' | 'comment'>('disposal');
-  const [deadline, setDeadline] = useState('');
-  const [measures, setMeasures] = useState('');
-  const [postCount, setPostCount] = useState('');
-  const [platforms, setPlatforms] = useState('');
-  const [contentDirection, setContentDirection] = useState('');
+  const [taskDrafts, setTaskDrafts] = useState<TaskDraft[]>(() => [createTaskDraft(sentimentLevel)]);
   const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
   const [referenceEventIds, setReferenceEventIds] = useState<string[]>([]);
   const [isTargetPickerOpen, setIsTargetPickerOpen] = useState(false);
@@ -78,43 +98,57 @@ export function AssignDialog({ open, onOpenChange, sentimentIds, sentimentLevel 
       return;
     }
 
-    if (!deadline || selectedTargets.length === 0) {
-      alert('请先选择处理对象并填写截止时间');
+    if (selectedTargets.length === 0 || taskDrafts.some((task) => !task.deadline)) {
+      alert('请先选择处理对象，并为每个任务填写截止时间');
       return;
     }
 
-    selectedSentiments.forEach((sentiment) => {
-      createAssignedTask({
-        sentimentId: sentiment.id,
-        sentimentTitle: sentiment.title,
-        sentimentLevel: sentiment.level,
-        taskType,
-        deadline: deadline.replace('T', ' '),
-        assigneeLabel: selectedTargetLabels.join('、'),
-        assignmentTargets: selectedTargets,
-        referenceEventIds,
-        measures,
-        postCount: Number(postCount) || undefined,
-        platforms: platforms.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
-        contentDirection,
-      });
-    });
+    void (async () => {
+      const requests = selectedSentiments.flatMap((sentiment) => (
+        selectedTargets.flatMap((target) => (
+          taskDrafts.map((task) => createAssignedTask({
+            sentimentId: sentiment.id,
+            sentimentTitle: sentiment.title,
+            sentimentLevel: sentiment.level,
+            taskType: task.taskType,
+            deadline: task.deadline.replace('T', ' '),
+            assigneeLabel: getAssignmentTargetLabel(target),
+            assignmentTargets: [target],
+            referenceEventIds,
+            measures: task.measures,
+            postCount: Number(task.postCount) || undefined,
+            platforms: task.platforms.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
+            contentDirection: task.contentDirection,
+          }))
+        ))
+      ));
 
-    onOpenChange(false);
+      await Promise.all(requests);
+      onOpenChange(false);
+    })();
   };
 
   useEffect(() => {
     if (!open) {
-      setTaskType('disposal');
-      setDeadline('');
-      setMeasures('');
-      setPostCount('');
-      setPlatforms('');
-      setContentDirection('');
+      setTaskDrafts([createTaskDraft(sentimentLevel)]);
       setSelectedTargets([]);
       setReferenceEventIds([]);
     }
   }, [open, sentimentIds.join(',')]);
+
+  const updateTaskDraft = (id: string, updates: Partial<TaskDraft>) => {
+    setTaskDrafts((current) => current.map((task) => (
+      task.id === id ? { ...task, ...updates } : task
+    )));
+  };
+
+  const addTaskDraft = () => {
+    setTaskDrafts((current) => [...current, createTaskDraft(highestLevel || sentimentLevel)]);
+  };
+
+  const removeTaskDraft = (id: string) => {
+    setTaskDrafts((current) => current.length > 1 ? current.filter((task) => task.id !== id) : current);
+  };
 
   return (
     <>
@@ -129,20 +163,7 @@ export function AssignDialog({ open, onOpenChange, sentimentIds, sentimentLevel 
                 ? `当前已选择 ${sentimentIds.length} 条舆情，最高等级为 `
                 : '当前舆情等级为 '}
               <strong>{highestLevel || sentimentLevel}</strong>
-              ，可发起线下处置任务或线上网评任务。
-            </div>
-
-            <div className="space-y-2">
-              <Label>选择任务类型</Label>
-              <Select value={taskType} onValueChange={(value: 'disposal' | 'comment') => setTaskType(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="请选择类型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="disposal">处置任务</SelectItem>
-                  <SelectItem value="comment">网评任务</SelectItem>
-                </SelectContent>
-              </Select>
+              ，可一次给多个对象下发处置、网评或通知任务。
             </div>
 
             <div className="space-y-2">
@@ -161,42 +182,89 @@ export function AssignDialog({ open, onOpenChange, sentimentIds, sentimentLevel 
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>截止时间</Label>
-              <Input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
-            </div>
-
-            {taskType === 'disposal' ? (
-              <div className="space-y-2">
-                <Label>处置措施与要求</Label>
-                <Textarea
-                  value={measures}
-                  onChange={(event) => setMeasures(event.target.value)}
-                  className="min-h-24"
-                  placeholder="请输入需要执行的处置动作"
-                />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label>任务配置</Label>
+                <Button variant="outline" size="sm" onClick={addTaskDraft}>
+                  添加任务
+                </Button>
               </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>要求发帖数量</Label>
-                  <Input type="number" min="1" value={postCount} onChange={(event) => setPostCount(event.target.value)} />
+
+              {taskDrafts.map((task, index) => (
+                <div key={task.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium text-slate-900">任务 {index + 1}</div>
+                    <Button variant="ghost" size="sm" disabled={taskDrafts.length === 1} onClick={() => removeTaskDraft(task.id)}>
+                      删除
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>任务类型</Label>
+                      <Select value={task.taskType} onValueChange={(value: AssignTaskType) => updateTaskDraft(task.id, { taskType: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="请选择类型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="disposal">处置任务</SelectItem>
+                          <SelectItem value="comment">网评任务</SelectItem>
+                          <SelectItem value="notification">通知任务</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>截止时间</Label>
+                      <Input type="datetime-local" value={task.deadline} onChange={(event) => updateTaskDraft(task.id, { deadline: event.target.value })} />
+                    </div>
+                  </div>
+
+                  {task.taskType === 'disposal' ? (
+                    <div className="space-y-2">
+                      <Label>处置措施与要求</Label>
+                      <Textarea
+                        value={task.measures}
+                        onChange={(event) => updateTaskDraft(task.id, { measures: event.target.value })}
+                        className="min-h-20"
+                        placeholder="请输入需要执行的处置动作"
+                      />
+                    </div>
+                  ) : task.taskType === 'comment' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>要求发帖数量</Label>
+                          <Input type="number" min="1" value={task.postCount} onChange={(event) => updateTaskDraft(task.id, { postCount: event.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>目标发布平台</Label>
+                          <Input value={task.platforms} onChange={(event) => updateTaskDraft(task.id, { platforms: event.target.value })} placeholder="例如：微博，知乎，抖音" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>内容导向 / 话术要求</Label>
+                        <Textarea
+                          value={task.contentDirection}
+                          onChange={(event) => updateTaskDraft(task.id, { contentDirection: event.target.value })}
+                          className="min-h-20"
+                          placeholder="请输入网评内容方向"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>通知内容</Label>
+                      <Textarea
+                        value={task.contentDirection}
+                        onChange={(event) => updateTaskDraft(task.id, { contentDirection: event.target.value })}
+                        className="min-h-20"
+                        placeholder="请输入通知任务说明，处理人收到后确认知悉即可"
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>目标发布平台</Label>
-                  <Input value={platforms} onChange={(event) => setPlatforms(event.target.value)} placeholder="例如：微博，知乎，抖音" />
-                </div>
-                <div className="space-y-2">
-                  <Label>内容导向 / 话术要求</Label>
-                  <Textarea
-                    value={contentDirection}
-                    onChange={(event) => setContentDirection(event.target.value)}
-                    className="min-h-24"
-                    placeholder="请输入网评内容方向"
-                  />
-                </div>
-              </>
-            )}
+              ))}
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">

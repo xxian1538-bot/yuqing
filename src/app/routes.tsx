@@ -9,6 +9,7 @@ import { AlertRules } from './components/disposal/AlertRules';
 
 // Comment (网评) components
 import { CommentTaskList } from './components/comment/CommentTaskList';
+import { NotificationTaskList } from './components/comment/NotificationTaskList';
 import { PerformanceManagement } from './components/comment/PerformanceManagement';
 
 // Settings (设置) components
@@ -68,6 +69,10 @@ export const router = createBrowserRouter([
           {
             path: "list",
             Component: CommentTaskList,
+          },
+          {
+            path: "notifications",
+            Component: NotificationTaskList,
           },
           {
             path: "performance",

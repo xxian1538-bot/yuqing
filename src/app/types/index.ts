@@ -27,6 +27,8 @@ export interface SentimentInfo {
   title: string;
   source: string;
   publishTime: string;
+  createdAt?: string;
+  deadline?: string;
   content: string;
   summary: string;
   channel: string;
@@ -123,6 +125,7 @@ export interface DisposalTask {
 // 网评任务
 export interface CommentTask {
   id: string;
+  taskCategory?: 'comment' | 'notification';
   sentimentId: string;
   disposalTaskId?: string;
   sentimentTitle: string;
@@ -134,7 +137,7 @@ export interface CommentTask {
     deadline: string;
   };
   assignee: string;
-  status: '未接收' | '已接收' | '未开始' | '进行中' | '已提交' | '已审核' | '未通过';
+  status: '未接收' | '已接收' | '未开始' | '进行中' | '已提交' | '已审核' | '未通过' | '已知悉' | '已完结';
   submissions: {
     id: string;
     title: string;

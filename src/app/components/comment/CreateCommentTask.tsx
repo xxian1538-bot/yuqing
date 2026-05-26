@@ -11,6 +11,7 @@ import { ReferenceCasePickerDialog } from "../ReferenceCasePickerDialog";
 import { SentimentPickerDialog } from "../SentimentPickerDialog";
 import { useSentimentData } from "../../context/SentimentDataContext";
 import { useTaskWorkflow } from "../../context/TaskWorkflowContext";
+import { getPresetDeadline } from "../../utils/sentimentDeadline";
 
 interface CreateCommentTaskProps {
   open: boolean;
@@ -32,7 +33,7 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
     postCount: 10,
     platforms: [] as string[],
     contentDirection: "",
-    deadline: ""
+    deadline: getPresetDeadline("一般")
   });
   const { sentiments } = useSentimentData();
   const { disposalTasks } = useTaskWorkflow();
@@ -109,7 +110,7 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
       postCount: 10,
       platforms: [],
       contentDirection: "",
-      deadline: ""
+      deadline: getPresetDeadline(selectedSentiment.level)
     });
     setSelectedSentimentId('');
     setSelectedTargets([]);
@@ -125,7 +126,7 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
         postCount: 10,
         platforms: [],
         contentDirection: "",
-        deadline: ""
+        deadline: getPresetDeadline("一般")
       });
       setSelectedSentimentId('');
     }
@@ -272,7 +273,15 @@ export function CreateCommentTask({ open, onOpenChange, onSubmit }: CreateCommen
         onOpenChange={setIsSentimentPickerOpen}
         sentiments={sentiments}
         selectedId={selectedSentimentId}
-        onConfirm={(sentiment) => setSelectedSentimentId(sentiment?.id || '')}
+        onConfirm={(sentiment) => {
+          setSelectedSentimentId(sentiment?.id || '');
+          if (sentiment) {
+            setFormData((prev) => ({
+              ...prev,
+              deadline: getPresetDeadline(sentiment.level),
+            }));
+          }
+        }}
       />
 
       <TargetPickerDialog
