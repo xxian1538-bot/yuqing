@@ -15,6 +15,8 @@ import {
 import { HandleDisposalDialog } from './HandleDisposalDialog';
 import { TaskDetailDialog } from './TaskDetailDialog';
 import { CreateDisposalTask } from './CreateDisposalTask';
+import { TaskCompletionReviewDialog } from '../TaskCompletionReviewDialog';
+import { TableActions } from '../TableActions';
 import type { DisposalTask } from '../../types';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
@@ -26,11 +28,13 @@ export function DisposalTasks() {
     workflowConfigs,
     createDisposalTask,
     acceptDisposalTask,
+    saveDisposalExecution,
     submitDisposalForReview,
   } = useTaskWorkflow();
   const [isHandleOpen, setIsHandleOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<DisposalTask | null>(null);
 
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -38,14 +42,22 @@ export function DisposalTasks() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  const handleDisposalSubmit = (details: string, attachment: string, completedAt: string, workflowConfigId: string) => {
+  const handleDisposalSubmit = (details: string, attachment: string, completedAt: string) => {
     if (!currentTask) return;
-    submitDisposalForReview({
+    saveDisposalExecution({
       taskId: currentTask.id,
       details,
       attachment,
       completedAt,
+    });
+  };
+
+  const handleCompletionSubmit = (workflowConfigId: string, summary: string) => {
+    if (!currentTask) return;
+    submitDisposalForReview({
+      taskId: currentTask.id,
       workflowConfigId,
+      summary,
     });
   };
 
@@ -54,6 +66,7 @@ export function DisposalTasks() {
       '未接收': 'bg-gray-100 text-gray-700',
       '已接收': 'bg-teal-100 text-teal-700',
       '处置中': 'bg-blue-100 text-blue-700',
+      '审核中': 'bg-amber-100 text-amber-700',
       '已完成': 'bg-green-100 text-green-700',
       '无法处置': 'bg-red-100 text-red-700',
       '已完结': 'bg-purple-100 text-purple-700',
@@ -106,13 +119,13 @@ export function DisposalTasks() {
             <div className="text-sm">
               <span className="text-gray-600">待处理：</span>
               <span className="font-semibold text-red-600">
-                {tasks.filter(t => ['未接收', '已接收', '处置中', '已完成'].includes(t.status)).length}
+                {tasks.filter(t => ['未接收', '已接收', '处置中', '审核中'].includes(t.status)).length}
               </span>
             </div>
             <div className="text-sm">
               <span className="text-gray-600">已完成：</span>
               <span className="font-semibold text-green-600">
-                {tasks.filter(t => t.status === '已完结' || t.status === '已完成').length}
+                {tasks.filter(t => t.status === '已完成' || t.status === '已完结').length}
               </span>
             </div>
           </div>
@@ -170,22 +183,22 @@ export function DisposalTasks() {
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>舆情标题</TableHead>
-              <TableHead>等级</TableHead>
-              <TableHead>负责人</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead>截止时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="w-[28%]">舆情标题</TableHead>
+              <TableHead className="w-[8%]">等级</TableHead>
+              <TableHead className="w-[18%]">负责人</TableHead>
+              <TableHead className="w-[10%]">状态</TableHead>
+              <TableHead className="w-[12%]">创建时间</TableHead>
+              <TableHead className="w-[12%]">截止时间</TableHead>
+              <TableHead className="w-[12%] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredTasks.map((task) => (
               <TableRow key={task.id}>
-                <TableCell className="max-w-md">
+                <TableCell>
                   <button
                     type="button"
                     className="line-clamp-2 text-left font-medium text-blue-600 hover:underline"
@@ -197,41 +210,52 @@ export function DisposalTasks() {
                     {task.sentimentTitle}
                   </button>
                 </TableCell>
-                <TableCell>{getLevelBadge(task.level)}</TableCell>
-                <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
-                <TableCell>{getStatusBadge(task.status)}</TableCell>
-                <TableCell className="text-sm text-gray-600">
+                <TableCell className="whitespace-nowrap">{getLevelBadge(task.level)}</TableCell>
+                <TableCell>
+                  <div className="line-clamp-2" title={getAssignmentDisplayName(task.assignmentTargets, task.assignee)}>
+                    {getAssignmentDisplayName(task.assignmentTargets, task.assignee)}
+                  </div>
+                </TableCell>
+                <TableCell className="whitespace-nowrap">{getStatusBadge(task.status)}</TableCell>
+                <TableCell className="text-sm text-gray-600 whitespace-nowrap">
                   {task.createdAt}
                 </TableCell>
-                <TableCell className={`text-sm ${getDeadlineClassName(task.deadline, task.status === '已完结')}`}>
+                <TableCell className={`whitespace-nowrap text-sm ${getDeadlineClassName(task.deadline, ['已完成', '已完结'].includes(task.status))}`}>
                   {task.deadline}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => {
-                      setCurrentTask(task);
-                      setIsDetailOpen(true);
-                    }}>查看详情</Button>
-
-                    {task.status === '未接收' && (
-                      <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => acceptDisposalTask(task.id)}>
-                        接收
-                      </Button>
-                    )}
-
-                    {['已接收', '处置中'].includes(task.status) && (
-                      <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
+                  <TableActions
+                    actions={[
+                      <Button variant="ghost" size="sm" onClick={() => {
                         setCurrentTask(task);
-                        setIsHandleOpen(true);
-                      }}>
-                        执行
-                      </Button>
-                    )}
-
-                    {task.reviewStatus === '待审核' && (
-                      <span className="text-xs text-amber-600">审核中</span>
-                    )}
-                  </div>
+                        setIsDetailOpen(true);
+                      }}>查看详情</Button>,
+                      task.status === '未接收' ? (
+                        <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => acceptDisposalTask(task.id)}>
+                          接收
+                        </Button>
+                      ) : null,
+                      ['已接收', '处置中'].includes(task.status) ? (
+                        <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
+                          setCurrentTask(task);
+                          setIsHandleOpen(true);
+                        }}>
+                          执行
+                        </Button>
+                      ) : null,
+                      ['已接收', '处置中'].includes(task.status) ? (
+                        <Button variant="ghost" size="sm" className="text-green-600" onClick={() => {
+                          setCurrentTask(task);
+                          setIsReviewOpen(true);
+                        }}>
+                          完结
+                        </Button>
+                      ) : null,
+                      (task.reviewStatus === '待审核' || task.status === '审核中') ? (
+                        <span className="inline-flex h-8 items-center px-2 text-xs text-amber-600">审核中</span>
+                      ) : null,
+                    ].filter(Boolean)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -243,8 +267,16 @@ export function DisposalTasks() {
         open={isHandleOpen}
         onOpenChange={setIsHandleOpen}
         task={currentTask}
-        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'disposal' && item.enabled)}
         onSubmit={handleDisposalSubmit}
+      />
+
+      <TaskCompletionReviewDialog
+        open={isReviewOpen}
+        onOpenChange={setIsReviewOpen}
+        title="处置任务完结送审"
+        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'disposal' && item.enabled)}
+        defaultSummary={currentTask?.result || currentTask?.progress || '已完成处置任务执行，申请完结审核。'}
+        onSubmit={handleCompletionSubmit}
       />
 
       <TaskDetailDialog

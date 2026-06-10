@@ -1,4 +1,5 @@
-import type { ScoringWeights, SentimentLevel } from '../types';
+import { defaultScoringMaxScores } from '../data/scoringConfig';
+import type { ScoringMaxScores, ScoringWeights, SentimentLevel } from '../types';
 
 export interface ScoredOption {
   value: string;
@@ -78,22 +79,23 @@ export function getOptionScore(options: ScoredOption[], value: string) {
   return options.find((option) => option.value === value)?.score || 0;
 }
 
-export function getWeightedScore(score: number, weight: number) {
-  return Number(((score / 100) * weight).toFixed(2));
+export function getWeightedScore(score: number, weight: number, maxScore = 100) {
+  return Number((Math.min(score / Math.max(maxScore, 1), 1) * weight).toFixed(2));
 }
 
 export function calculateSentimentLevel(
   selections: SentimentScoreSelections,
   weights: ScoringWeights,
+  maxScores: ScoringMaxScores = defaultScoringMaxScores,
 ): { score: number; level: SentimentLevel } {
   const ratioScore =
-    (getOptionScore(topicOptions, selections.topic) / 100) * weights.topicWeight +
-    (getOptionScore(attentionOptions, selections.attention) / 100) * weights.attentionWeight +
-    (getOptionScore(emotionOptions, selections.emotion) / 100) * weights.emotionWeight +
-    (getOptionScore(mediaSpreadOptions, selections.mediaSpread) / 100) * weights.mediaWeight +
-    (getOptionScore(formatOptions, selections.format) / 100) * weights.formatWeight +
-    (getOptionScore(channelOptions, selections.channel) / 100) * weights.channelWeight +
-    (getOptionScore(influenceOptions, selections.influence) / 100) * weights.influenceWeight;
+    getWeightedScore(getOptionScore(topicOptions, selections.topic), weights.topicWeight, maxScores.topicMaxScore) +
+    getWeightedScore(getOptionScore(attentionOptions, selections.attention), weights.attentionWeight, maxScores.attentionMaxScore) +
+    getWeightedScore(getOptionScore(emotionOptions, selections.emotion), weights.emotionWeight, maxScores.emotionMaxScore) +
+    getWeightedScore(getOptionScore(mediaSpreadOptions, selections.mediaSpread), weights.mediaWeight, maxScores.mediaMaxScore) +
+    getWeightedScore(getOptionScore(formatOptions, selections.format), weights.formatWeight, maxScores.formatMaxScore) +
+    getWeightedScore(getOptionScore(channelOptions, selections.channel), weights.channelWeight, maxScores.channelMaxScore) +
+    getWeightedScore(getOptionScore(influenceOptions, selections.influence), weights.influenceWeight, maxScores.influenceMaxScore);
 
   const totalWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
   const score = totalWeight > 0 ? Math.round((ratioScore / totalWeight) * 100) : 0;

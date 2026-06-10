@@ -1,22 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
-import type { CommentTask, WorkflowConfig } from "../../types";
-import { getWorkflowSummary } from '../../utils/workflow';
+import type { CommentTask } from "../../types";
 
 interface ExecuteCommentTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: CommentTask | null;
-  workflowConfigs: WorkflowConfig[];
-  onSubmit: (taskId: string, submission: any, isFinished: boolean, workflowConfigId?: string) => void;
+  onSubmit: (taskId: string, submission: any) => void;
 }
 
-export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowConfigs, onSubmit }: ExecuteCommentTaskDialogProps) {
-  const defaultWorkflowId = workflowConfigs.find((item) => item.isDefault)?.id || workflowConfigs[0]?.id || "";
+export function ExecuteCommentTaskDialog({ open, onOpenChange, task, onSubmit }: ExecuteCommentTaskDialogProps) {
   const [formData, setFormData] = useState({
     platform: "",
     account: "",
@@ -29,28 +26,13 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowCon
     commentCount: "0",
     collectCount: "0",
     summary: "",
-    workflowConfigId: defaultWorkflowId,
   });
 
-  useEffect(() => {
-    if (open) {
-      setFormData((prev) => ({
-        ...prev,
-        workflowConfigId: defaultWorkflowId,
-      }));
-    }
-  }, [defaultWorkflowId, open]);
-
-  const handleSubmit = (isFinished: boolean) => {
+  const handleSubmit = () => {
     if (!task) return;
     
     if (!formData.platform || !formData.account || !formData.link) {
       alert("请填写必填项（平台、账号、链接）");
-      return;
-    }
-
-    if (isFinished && !formData.workflowConfigId) {
-      alert("请选择审核流");
       return;
     }
 
@@ -66,7 +48,7 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowCon
       postTime: new Date().toLocaleString()
     };
 
-    onSubmit(task.id, submission, isFinished, formData.workflowConfigId);
+    onSubmit(task.id, submission);
     onOpenChange(false);
     
     // Reset
@@ -82,7 +64,6 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowCon
       commentCount: "0",
       collectCount: "0",
       summary: "",
-      workflowConfigId: defaultWorkflowId,
     });
   };
 
@@ -185,21 +166,6 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowCon
             />
           </div>
 
-          <div className="space-y-2 pt-2">
-            <Label>审核流</Label>
-            <Select value={formData.workflowConfigId} onValueChange={v => setFormData({...formData, workflowConfigId: v})}>
-              <SelectTrigger>
-                <SelectValue placeholder="请选择审核流" />
-              </SelectTrigger>
-              <SelectContent>
-                {workflowConfigs.map((workflow) => (
-                  <SelectItem key={workflow.id} value={workflow.id}>
-                    {getWorkflowSummary(workflow)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         <div className="flex justify-between items-center bg-gray-50 p-3 rounded border">
@@ -208,11 +174,8 @@ export function ExecuteCommentTaskDialog({ open, onOpenChange, task, workflowCon
           </div>
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button variant="secondary" onClick={() => handleSubmit(false)}>
-              提交单条记录 (暂不完结)
-            </Button>
-            <Button onClick={() => handleSubmit(true)} className="bg-green-600 hover:bg-green-700 text-white">
-              提交并申请完结任务
+            <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">
+              提交执行记录
             </Button>
           </div>
         </div>

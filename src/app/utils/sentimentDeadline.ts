@@ -30,6 +30,31 @@ export function formatDateTimeLocal(value: string | undefined) {
   return toDateTimeLocalValue(value).replace('T', ' ');
 }
 
+export function parseDateTimeValue(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/\//g, '-').replace(' ', 'T');
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+export function formatShortDateTime(value: string | undefined) {
+  const date = parseDateTimeValue(value);
+
+  if (!date) {
+    return value || '';
+  }
+
+  return `${pad(date.getFullYear() % 100)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function getPresetDeadline(level: SentimentLevel, baseDate = new Date()) {
   const hours = urgentLevels.includes(level) ? 24 : 48;
   const date = new Date(baseDate.getTime() + hours * 60 * 60 * 1000);

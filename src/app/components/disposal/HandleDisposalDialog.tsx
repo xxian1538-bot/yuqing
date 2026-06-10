@@ -3,49 +3,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { Textarea } from "../ui/textarea";
-import { DisposalTask, WorkflowConfig } from "../../types";
-import { getWorkflowSummary } from '../../utils/workflow';
+import { DisposalTask } from "../../types";
 
 interface HandleDisposalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: DisposalTask | null;
-  workflowConfigs: WorkflowConfig[];
-  onSubmit: (details: string, attachment: string, completedAt: string, workflowConfigId: string) => void;
+  onSubmit: (details: string, attachment: string, completedAt: string) => void;
 }
 
-export function HandleDisposalDialog({ open, onOpenChange, task, workflowConfigs, onSubmit }: HandleDisposalProps) {
+export function HandleDisposalDialog({ open, onOpenChange, task, onSubmit }: HandleDisposalProps) {
   const [details, setDetails] = useState('');
   const [attachment, setAttachment] = useState('');
   const [completedAt, setCompletedAt] = useState('');
-  const defaultWorkflowId = workflowConfigs.find((item) => item.isDefault)?.id || workflowConfigs[0]?.id || '';
-  const [workflowConfigId, setWorkflowConfigId] = useState(defaultWorkflowId);
 
   useEffect(() => {
     if (open) {
       setDetails(task?.result || task?.progress || '');
       setAttachment('');
       setCompletedAt(task?.completedAt?.replace(' ', 'T') || '');
-      setWorkflowConfigId(defaultWorkflowId);
     }
-  }, [defaultWorkflowId, open, task]);
+  }, [open, task]);
 
   const handleSubmit = () => {
-    if (!workflowConfigId) {
-      alert('请选择审核流');
-      return;
-    }
     if (!details.trim()) {
       alert('请输入任务执行内容');
       return;
     }
-    if (!completedAt) {
-      alert('请选择完成时间');
-      return;
-    }
-    onSubmit(details, attachment, completedAt.replace('T', ' '), workflowConfigId);
+    onSubmit(details, attachment, completedAt.replace('T', ' '));
     onOpenChange(false);
   };
 
@@ -66,7 +52,7 @@ export function HandleDisposalDialog({ open, onOpenChange, task, workflowConfigs
             />
           </div>
           <div className="space-y-2">
-            <Label>完成时间</Label>
+            <Label>执行时间</Label>
             <Input
               type="datetime-local"
               value={completedAt}
@@ -81,25 +67,10 @@ export function HandleDisposalDialog({ open, onOpenChange, task, workflowConfigs
             />
             {attachment && <p className="text-xs text-green-600 mt-1">{attachment}</p>}
           </div>
-          <div className="space-y-2">
-            <Label>审核流</Label>
-            <Select value={workflowConfigId} onValueChange={setWorkflowConfigId}>
-              <SelectTrigger>
-                <SelectValue placeholder="请选择审核流" />
-              </SelectTrigger>
-              <SelectContent>
-                {workflowConfigs.map((workflow) => (
-                  <SelectItem key={workflow.id} value={workflow.id}>
-                    {getWorkflowSummary(workflow)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">保存并提交审核</Button>
+          <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">保存执行记录</Button>
         </div>
       </DialogContent>
     </Dialog>

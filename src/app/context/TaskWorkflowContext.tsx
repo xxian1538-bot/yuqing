@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
-import { appApi, type AssignTaskPayload, type SubmitCommentPayload, type SubmitDisposalPayload } from '../lib/api';
+import { appApi, type AssignTaskPayload, type SubmitCommentPayload, type SubmitDisposalPayload, type SubmitTaskReviewPayload } from '../lib/api';
 import { useSentimentData } from './SentimentDataContext';
 import type {
   CommentTask,
@@ -23,8 +23,10 @@ interface TaskWorkflowContextValue {
   acceptDisposalTask: (taskId: string) => void;
   acceptCommentTask: (taskId: string) => void;
   confirmNotificationTask: (taskId: string) => void;
-  submitDisposalForReview: (payload: SubmitDisposalPayload) => void;
+  saveDisposalExecution: (payload: SubmitDisposalPayload) => void;
   submitCommentExecution: (payload: SubmitCommentPayload) => void;
+  submitDisposalForReview: (payload: SubmitTaskReviewPayload) => void;
+  submitCommentForReview: (payload: SubmitTaskReviewPayload) => void;
   approveReview: (reviewId: string, comment: string) => void;
   rejectReview: (reviewId: string, comment: string) => void;
   updateWorkflowConfig: (workflowId: string, updates: Partial<WorkflowConfig>) => void;
@@ -115,7 +117,6 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
             collectCount: 0,
             summary: '已确认知悉',
           },
-          submitForReview: false,
         });
         await loadTaskWorkflow();
       } catch (error) {
@@ -124,10 +125,32 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
     })();
   };
 
-  const submitDisposalForReview = ({ taskId, details, attachment, completedAt, workflowConfigId }: SubmitDisposalPayload) => {
+  const saveDisposalExecution = ({ taskId, details, attachment, completedAt }: SubmitDisposalPayload) => {
     void (async () => {
       try {
-        await appApi.submitDisposalForReview({ taskId, details, attachment, completedAt, workflowConfigId });
+        await appApi.saveDisposalExecution({ taskId, details, attachment, completedAt });
+        await loadTaskWorkflow();
+      } catch (error) {
+        console.error('Failed to save disposal execution', error);
+      }
+    })();
+  };
+
+  const submitCommentExecution = ({ taskId, submission }: SubmitCommentPayload) => {
+    void (async () => {
+      try {
+        await appApi.submitCommentExecution({ taskId, submission });
+        await loadTaskWorkflow();
+      } catch (error) {
+        console.error('Failed to submit comment execution', error);
+      }
+    })();
+  };
+
+  const submitDisposalForReview = ({ taskId, workflowConfigId, summary }: SubmitTaskReviewPayload) => {
+    void (async () => {
+      try {
+        await appApi.submitDisposalForReview({ taskId, workflowConfigId, summary });
         await loadTaskWorkflow();
       } catch (error) {
         console.error('Failed to submit disposal review', error);
@@ -135,13 +158,13 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
     })();
   };
 
-  const submitCommentExecution = ({ taskId, submission, submitForReview, workflowConfigId }: SubmitCommentPayload) => {
+  const submitCommentForReview = ({ taskId, workflowConfigId, summary }: SubmitTaskReviewPayload) => {
     void (async () => {
       try {
-        await appApi.submitCommentExecution({ taskId, submission, submitForReview, workflowConfigId });
+        await appApi.submitCommentForReview({ taskId, workflowConfigId, summary });
         await loadTaskWorkflow();
       } catch (error) {
-        console.error('Failed to submit comment execution', error);
+        console.error('Failed to submit comment review', error);
       }
     })();
   };
@@ -265,8 +288,10 @@ export function TaskWorkflowProvider({ children }: { children: ReactNode }) {
     acceptDisposalTask,
     acceptCommentTask,
     confirmNotificationTask,
-    submitDisposalForReview,
+    saveDisposalExecution,
     submitCommentExecution,
+    submitDisposalForReview,
+    submitCommentForReview,
     approveReview,
     rejectReview,
     updateWorkflowConfig,

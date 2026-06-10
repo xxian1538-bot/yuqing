@@ -21,7 +21,7 @@ export function getSentimentTaskStatus(
     return '待指派';
   }
 
-  const hasPendingDisposal = relatedDisposals.some((task) => task.status !== '已完结');
+  const hasPendingDisposal = relatedDisposals.some((task) => !['已完成', '已完结'].includes(task.status));
   const hasPendingComment = relatedComments.some((task) => (
     task.taskCategory === 'notification'
       ? !['已知悉', '已完结'].includes(task.status)

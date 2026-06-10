@@ -2,7 +2,7 @@ import type {
   CommentTask,
   DisposalTask,
   ReviewRequest,
-  ScoringWeights,
+  ScoringConfig,
   SentimentClosureRecord,
   SentimentInfo,
   SentimentStatus,
@@ -30,14 +30,17 @@ export interface SubmitDisposalPayload {
   details: string;
   attachment: string;
   completedAt: string;
-  workflowConfigId: string;
 }
 
 export interface SubmitCommentPayload {
   taskId: string;
   submission: CommentTask['submissions'][number];
-  submitForReview: boolean;
-  workflowConfigId?: string;
+}
+
+export interface SubmitTaskReviewPayload {
+  taskId: string;
+  workflowConfigId: string;
+  summary?: string;
 }
 
 export interface ReportPayload {
@@ -134,11 +137,19 @@ export const appApi = {
     method: 'POST',
     body: JSON.stringify({ taskId }),
   }),
-  submitDisposalForReview: (payload: SubmitDisposalPayload) => request('/api/tasks/disposal/submit-review', {
+  saveDisposalExecution: (payload: SubmitDisposalPayload) => request('/api/tasks/disposal/execute', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
   submitCommentExecution: (payload: SubmitCommentPayload) => request('/api/tasks/comment/submit', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  submitDisposalForReview: (payload: SubmitTaskReviewPayload) => request('/api/tasks/disposal/complete', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  submitCommentForReview: (payload: SubmitTaskReviewPayload) => request('/api/tasks/comment/complete', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
@@ -169,9 +180,9 @@ export const appApi = {
     method: 'POST',
     body: JSON.stringify({ sentimentId, note }),
   }),
-  getScoringWeights: () => request<ScoringWeights>('/api/scoring-config'),
-  updateScoringWeights: (weights: ScoringWeights) => request('/api/scoring-config', {
+  getScoringConfig: () => request<ScoringConfig>('/api/scoring-config'),
+  updateScoringConfig: (config: ScoringConfig) => request('/api/scoring-config', {
     method: 'PUT',
-    body: JSON.stringify({ weights }),
+    body: JSON.stringify({ config }),
   }),
 };

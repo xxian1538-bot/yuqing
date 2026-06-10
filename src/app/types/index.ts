@@ -21,6 +21,21 @@ export interface ScoringWeights {
   influenceWeight: number;
 }
 
+export interface ScoringMaxScores {
+  topicMaxScore: number;
+  attentionMaxScore: number;
+  emotionMaxScore: number;
+  mediaMaxScore: number;
+  formatMaxScore: number;
+  channelMaxScore: number;
+  influenceMaxScore: number;
+}
+
+export interface ScoringConfig {
+  weights: ScoringWeights;
+  maxScores: ScoringMaxScores;
+}
+
 // 舆情信息
 export interface SentimentInfo {
   id: string;
@@ -105,7 +120,7 @@ export interface DisposalTask {
   level: SentimentLevel;
   assignee: string;
   deadline: string;
-  status: '未接收' | '已接收' | '处置中' | '已完成' | '无法处置' | '已完结';
+  status: '未接收' | '已接收' | '处置中' | '审核中' | '已完成' | '无法处置' | '已完结';
   progress: string;
   measures: string;
   evidence: string[];
@@ -137,7 +152,7 @@ export interface CommentTask {
     deadline: string;
   };
   assignee: string;
-  status: '未接收' | '已接收' | '未开始' | '进行中' | '已提交' | '已审核' | '未通过' | '已知悉' | '已完结';
+  status: '未接收' | '已接收' | '未开始' | '进行中' | '审核中' | '已提交' | '已审核' | '未通过' | '已知悉' | '已完结';
   submissions: {
     id: string;
     title: string;

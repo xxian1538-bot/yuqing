@@ -7,12 +7,13 @@ loadEnv();
 import { deleteMany, deleteRecord, ensureSchema, getCollectionStats, getMysqlConfig, upsertMany, upsertRecord, waitForMysql } from './db';
 import { loadAppState, seedStateIfEmpty } from './state';
 import { associateSentiments } from '../src/app/utils/sentimentAssociations';
+import { normalizeScoringConfig } from '../src/app/data/scoringConfig';
 import type {
   CommentTask,
   DisposalTask,
   ReportRecord,
   ReviewRequest,
-  ScoringWeights,
+  ScoringConfig,
   SentimentClosureRecord,
   SentimentInfo,
   SentimentStatus,
@@ -113,7 +114,7 @@ async function handleGetTaskWorkflow(response: import('node:http').ServerRespons
 
 async function handleGetScoringConfig(response: import('node:http').ServerResponse) {
   const state = await loadAppState();
-  json(response, 200, state.scoringWeights);
+  json(response, 200, state.scoringConfig);
 }
 
 async function handleAddSentiment(body: any, response: import('node:http').ServerResponse) {
@@ -332,13 +333,43 @@ async function handleAcceptCommentTask(body: any, response: import('node:http').
   json(response, 200, { ok: true });
 }
 
-async function handleSubmitDisposalReview(body: any, response: import('node:http').ServerResponse) {
-  const { taskId, details, attachment, completedAt, workflowConfigId } = body as {
+async function handleSaveDisposalExecution(body: any, response: import('node:http').ServerResponse) {
+  const { taskId, details, attachment, completedAt } = body as {
     taskId: string;
     details: string;
     attachment: string;
     completedAt: string;
+  };
+  const state = await loadAppState();
+
+  const task = state.disposalTasks.find((item) => item.id === taskId);
+  if (!task) {
+    return notFound(response);
+  }
+
+  const tasks = state.disposalTasks.map((item) => (
+    item.id === taskId
+      ? {
+          ...item,
+          progress: details,
+          result: details,
+          evidence: attachment ? [attachment] : item.evidence,
+          completedAt: completedAt || item.completedAt || nowString(),
+          updatedAt: nowString(),
+        }
+      : item
+  ));
+
+  await persistDisposalTasks(tasks);
+
+  json(response, 200, { ok: true });
+}
+
+async function handleSubmitDisposalReview(body: any, response: import('node:http').ServerResponse) {
+  const { taskId, workflowConfigId, summary } = body as {
+    taskId: string;
     workflowConfigId: string;
+    summary?: string;
   };
   const state = await loadAppState();
   const workflow = state.workflowConfigs.find((item) => item.id === workflowConfigId);
@@ -360,7 +391,7 @@ async function handleSubmitDisposalReview(body: any, response: import('node:http
     workflowConfigId: workflow.id,
     workflowConfigName: workflow.name,
     requester: CURRENT_USER,
-    summary: details,
+    summary: summary || task.result || task.progress || '已完成任务执行，申请完结审核。',
     status: '待审核',
     submittedAt: nowString(),
   };
@@ -369,11 +400,7 @@ async function handleSubmitDisposalReview(body: any, response: import('node:http
     item.id === taskId
       ? {
           ...item,
-          status: '已完成' as const,
-          progress: details,
-          result: details,
-          evidence: attachment ? [attachment] : item.evidence,
-          completedAt: completedAt || item.completedAt || nowString(),
+          status: '审核中' as const,
           reviewStatus: '待审核' as const,
           reviewWorkflowId: workflow.id,
           reviewWorkflowName: workflow.name,
@@ -391,11 +418,9 @@ async function handleSubmitDisposalReview(body: any, response: import('node:http
 }
 
 async function handleSubmitComment(body: any, response: import('node:http').ServerResponse) {
-  const { taskId, submission, submitForReview, workflowConfigId } = body as {
+  const { taskId, submission } = body as {
     taskId: string;
     submission: CommentTask['submissions'][number];
-    submitForReview: boolean;
-    workflowConfigId?: string;
   };
 
   const state = await loadAppState();
@@ -409,8 +434,6 @@ async function handleSubmitComment(body: any, response: import('node:http').Serv
     id: submission.id || `submission-${Date.now()}`,
   };
 
-  let review: ReviewRequest | null = null;
-
   const tasks = state.commentTasks.map((item) => {
     if (item.id !== taskId) {
       return item;
@@ -422,44 +445,66 @@ async function handleSubmitComment(body: any, response: import('node:http').Serv
       updatedAt: nowString(),
     };
 
-    if (!submitForReview) {
-      nextTask.status = item.taskCategory === 'notification' ? '已完结' : '进行中';
-      return nextTask;
-    }
-
-    if (!workflowConfigId) {
-      return nextTask;
-    }
-
-    const workflow = state.workflowConfigs.find((config) => config.id === workflowConfigId);
-    if (!workflow) {
-      throw new Error('未找到审核流配置');
-    }
-
-    review = {
-      id: `review-${Date.now()}`,
-      taskType: 'comment',
-      taskId: item.id,
-      sentimentId: item.sentimentId,
-      sentimentTitle: item.sentimentTitle,
-      workflowConfigId: workflow.id,
-      workflowConfigName: workflow.name,
-      requester: CURRENT_USER,
-      summary: nextSubmission.summary || nextSubmission.content || '已提交执行材料，申请审核。',
-      status: '待审核',
-      submittedAt: nowString(),
-    };
-
-    nextTask.status = '已提交';
-    nextTask.reviewWorkflowId = workflow.id;
-    nextTask.reviewWorkflowName = workflow.name;
+    nextTask.status = item.taskCategory === 'notification' ? '已完结' : '进行中';
     return nextTask;
   });
 
   await persistCommentTasks(tasks);
-  if (review) {
-    await upsertRecord('review_requests', review.id, review);
+  json(response, 200, { ok: true });
+}
+
+async function handleSubmitCommentReview(body: any, response: import('node:http').ServerResponse) {
+  const { taskId, workflowConfigId, summary } = body as {
+    taskId: string;
+    workflowConfigId: string;
+    summary?: string;
+  };
+
+  const state = await loadAppState();
+  const task = state.commentTasks.find((item) => item.id === taskId);
+  if (!task) {
+    return notFound(response);
   }
+
+  const workflow = state.workflowConfigs.find((config) => config.id === workflowConfigId);
+  if (!workflow) {
+    return json(response, 400, { message: '未找到审核流配置' });
+  }
+
+  const latestSubmission = [...task.submissions].sort((a, b) => (
+    new Date(b.postTime).getTime() - new Date(a.postTime).getTime()
+  ))[0];
+
+  const review: ReviewRequest = {
+    id: `review-${Date.now()}`,
+    taskType: 'comment',
+    taskId: task.id,
+    sentimentId: task.sentimentId,
+    sentimentTitle: task.sentimentTitle,
+    workflowConfigId: workflow.id,
+    workflowConfigName: workflow.name,
+    requester: CURRENT_USER,
+    summary: summary || latestSubmission?.summary || latestSubmission?.content || '已提交执行材料，申请完结审核。',
+    status: '待审核',
+    submittedAt: nowString(),
+  };
+
+  const tasks = state.commentTasks.map((item) => (
+    item.id === taskId
+      ? {
+          ...item,
+          status: '审核中' as const,
+          reviewWorkflowId: workflow.id,
+          reviewWorkflowName: workflow.name,
+          updatedAt: nowString(),
+        }
+      : item
+  ));
+
+  await Promise.all([
+    persistCommentTasks(tasks),
+    upsertRecord('review_requests', review.id, review),
+  ]);
   json(response, 200, { ok: true });
 }
 
@@ -484,7 +529,7 @@ async function handleApproveReview(body: any, response: import('node:http').Serv
       item.id === review.taskId
         ? {
             ...item,
-            status: '已完结' as const,
+            status: '已完成' as const,
             reviewStatus: '审核通过' as const,
             reviewComment: comment,
             updatedAt: nowString(),
@@ -651,8 +696,19 @@ async function handleConfirmClosure(body: any, response: import('node:http').Ser
 }
 
 async function handleUpdateScoringConfig(body: any, response: import('node:http').ServerResponse) {
-  const { weights } = body as { weights: ScoringWeights };
-  await upsertRecord('scoring_config', 'default', weights);
+  const { config } = body as { config: ScoringConfig };
+  const nextConfig = normalizeScoringConfig(config);
+  const totalWeight = Object.values(nextConfig.weights).reduce((sum, value) => sum + value, 0);
+
+  if (totalWeight !== 100) {
+    return json(response, 400, { message: '权重总和必须等于 100%' });
+  }
+
+  if (Object.values(nextConfig.maxScores).some((value) => value <= 0)) {
+    return json(response, 400, { message: '每个评分项总分必须大于 0' });
+  }
+
+  await upsertRecord('scoring_config', 'default', nextConfig);
   json(response, 200, { ok: true });
 }
 
@@ -740,11 +796,17 @@ async function bootstrap() {
       if (request.method === 'POST' && url.pathname === '/api/tasks/comment/accept') {
         return await handleAcceptCommentTask(body, response);
       }
-      if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/submit-review') {
+      if (request.method === 'POST' && url.pathname === '/api/tasks/disposal/execute') {
+        return await handleSaveDisposalExecution(body, response);
+      }
+      if (request.method === 'POST' && (url.pathname === '/api/tasks/disposal/complete' || url.pathname === '/api/tasks/disposal/submit-review')) {
         return await handleSubmitDisposalReview(body, response);
       }
       if (request.method === 'POST' && url.pathname === '/api/tasks/comment/submit') {
         return await handleSubmitComment(body, response);
+      }
+      if (request.method === 'POST' && url.pathname === '/api/tasks/comment/complete') {
+        return await handleSubmitCommentReview(body, response);
       }
       if (request.method === 'POST' && url.pathname === '/api/reviews/approve') {
         return await handleApproveReview(body, response);

@@ -35,11 +35,12 @@ import { AssignDialog } from './AssignDialog';
 import { SentimentEditDialog } from './SentimentEditDialog';
 import { SentimentClosureDialog } from './SentimentClosureDialog';
 import { SentimentPickerDialog } from './SentimentPickerDialog';
+import { TableActions } from './TableActions';
 import type { SentimentInfo, SentimentStatus, EmotionTrend } from '../types';
 import { getAssociationGroupIds } from '../utils/sentimentAssociations';
 import { useSentimentData } from '../context/SentimentDataContext';
 import { useTaskWorkflow } from '../context/TaskWorkflowContext';
-import { formatDateTimeLocal } from '../utils/sentimentDeadline';
+import { formatShortDateTime, parseDateTimeValue } from '../utils/sentimentDeadline';
 
 export function SentimentList() {
   const { sentiments, addSentiment, updateSentiment, deleteSentiments, associateEvents } = useSentimentData();
@@ -71,19 +72,25 @@ export function SentimentList() {
   const associationCandidates = sentiments.filter(sentiment => associationGroupIds.includes(sentiment.id));
 
   // 筛选逻辑
-  const filteredSentiments = sentiments.filter(sentiment => {
-    if (searchKeyword && !sentiment.title.toLowerCase().includes(searchKeyword.toLowerCase()) &&
-        !sentiment.content.toLowerCase().includes(searchKeyword.toLowerCase())) {
-      return false;
-    }
-    if (statusFilter !== '全部' && sentiment.status !== statusFilter) {
-      return false;
-    }
-    if (emotionFilter !== '全部' && sentiment.emotionTrend !== emotionFilter) {
-      return false;
-    }
-    return true;
-  });
+  const filteredSentiments = sentiments
+    .filter(sentiment => {
+      if (searchKeyword && !sentiment.title.toLowerCase().includes(searchKeyword.toLowerCase()) &&
+          !sentiment.content.toLowerCase().includes(searchKeyword.toLowerCase())) {
+        return false;
+      }
+      if (statusFilter !== '全部' && sentiment.status !== statusFilter) {
+        return false;
+      }
+      if (emotionFilter !== '全部' && sentiment.emotionTrend !== emotionFilter) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const bTime = parseDateTimeValue(b.createdAt || b.publishTime)?.getTime() || 0;
+      const aTime = parseDateTimeValue(a.createdAt || a.publishTime)?.getTime() || 0;
+      return bTime - aTime;
+    });
 
   // 分页
   const totalPages = Math.ceil(filteredSentiments.length / pageSize);
@@ -363,25 +370,24 @@ export function SentimentList() {
 
       {/* 表格 */}
       <div className="overflow-hidden rounded-3xl border border-white/70 bg-white/70 shadow-[0_22px_60px_rgba(32,97,165,0.10)] backdrop-blur-2xl">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
+              <TableHead className="w-[3%]">
                 <Checkbox
                   checked={selectedIds.length === paginatedSentiments.length && paginatedSentiments.length > 0}
                   onCheckedChange={handleSelectAll}
                 />
               </TableHead>
-              <TableHead className="min-w-[150px] max-w-[200px]">标题</TableHead>
-              <TableHead className="min-w-[80px]">事件等级</TableHead>
-              <TableHead className="min-w-[80px]">报送状态</TableHead>
-              <TableHead className="min-w-[80px]">任务状态</TableHead>
-              <TableHead className="min-w-[100px]">处理截止时间</TableHead>
-              <TableHead className="min-w-[100px]">入库时间</TableHead>
-              <TableHead className="min-w-[80px]">来源平台</TableHead>
-              <TableHead className="min-w-[150px] max-w-[250px]">内容</TableHead>
-              <TableHead className="min-w-[120px] max-w-[200px]">研判建议</TableHead>
-              <TableHead className="text-right min-w-[150px]">操作</TableHead>
+              <TableHead className="w-[18%]">标题</TableHead>
+              <TableHead className="w-[7%]">事件等级</TableHead>
+              <TableHead className="w-[7%]">报送状态</TableHead>
+              <TableHead className="w-[7%]">任务状态</TableHead>
+              <TableHead className="w-[10%]">处理截止时间</TableHead>
+              <TableHead className="w-[8%]">来源平台</TableHead>
+              <TableHead className="w-[15%]">内容</TableHead>
+              <TableHead className="w-[13%]">研判建议</TableHead>
+              <TableHead className="w-[12%] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -393,7 +399,7 @@ export function SentimentList() {
                     onCheckedChange={(checked) => handleSelectOne(sentiment.id, checked as boolean)}
                   />
                 </TableCell>
-                <TableCell className="max-w-[200px] xl:max-w-[300px] whitespace-normal">
+                <TableCell>
                   <div className="space-y-1">
                     <a
                       href={sentiment.link}
@@ -427,101 +433,101 @@ export function SentimentList() {
                     {sentiment.status === "已报送" ? "已报送" : "未报送"}
                   </Badge>
                 </TableCell>
-                <TableCell>{getTaskStatusBadge(sentiment.id)}</TableCell>
+                <TableCell className="whitespace-nowrap">{getTaskStatusBadge(sentiment.id)}</TableCell>
                 <TableCell>
-                  <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.deadline || sentiment.publishTime}</div>
+                  <div className="line-clamp-2 text-sm text-gray-600" title={formatShortDateTime(sentiment.deadline || sentiment.publishTime)}>
+                    {formatShortDateTime(sentiment.deadline || sentiment.publishTime)}
+                  </div>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-gray-600 whitespace-nowrap">{sentiment.createdAt || sentiment.publishTime}</div>
+                  <div className="line-clamp-2 text-sm" title={sentiment.source}>{sentiment.source}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm">{sentiment.source}</div>
-                </TableCell>
-                <TableCell className="max-w-[200px] xl:max-w-[250px] whitespace-normal">
                   <div className="text-sm text-gray-600 line-clamp-2" title={sentiment.content}>
                     {sentiment.content}
                   </div>
                 </TableCell>
-                <TableCell className="max-w-[150px] xl:max-w-[200px] whitespace-normal">
+                <TableCell>
                   <div className="text-sm text-gray-600 line-clamp-2" title={sentiment.analysis}>
                     {sentiment.analysis}
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Link to={`/sentiment/${sentiment.id}`}>
-                      <Button variant="ghost" size="sm">
-                        <Eye className="w-4 h-4 mr-1" />
-                        详情
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCurrentSentiment(sentiment);
-                        setIsEditOpen(true);
-                      }}
-                    >
-                      <Pencil className="w-4 h-4 mr-1" />
-                      编辑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCurrentSentiment(sentiment);
-                        setReportSentimentIds([sentiment.id]);
-                        setIsReportOpen(true);
-                      }}
-                    >
-                      <Send className="w-4 h-4 mr-1" />
-                      报送
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCurrentSentiment(sentiment);
-                        setAssignSentimentIds([sentiment.id]);
-                        setIsAssignOpen(true);
-                      }}
-                    >
-                      <UserPlus className="w-4 h-4 mr-1" />
-                      指派
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openSingleAssociateDialog(sentiment)}
-                    >
-                      <Link2 className="w-4 h-4 mr-1" />
-                      关联
-                    </Button>
-                    {sentiment.status !== '已办结' ? (
+                  <TableActions
+                    actions={[
+                      <Link to={`/sentiment/${sentiment.id}`}>
+                        <Button variant="ghost" size="sm">
+                          <Eye className="w-4 h-4 mr-1" />
+                          详情
+                        </Button>
+                      </Link>,
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setCurrentSentiment(sentiment);
+                          setIsEditOpen(true);
+                        }}
+                      >
+                        <Pencil className="w-4 h-4 mr-1" />
+                        编辑
+                      </Button>,
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setCurrentSentiment(sentiment);
+                          setReportSentimentIds([sentiment.id]);
+                          setIsReportOpen(true);
+                        }}
+                      >
+                        <Send className="w-4 h-4 mr-1" />
+                        报送
+                      </Button>,
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setCurrentSentiment(sentiment);
+                          setAssignSentimentIds([sentiment.id]);
+                          setIsAssignOpen(true);
+                        }}
+                      >
+                        <UserPlus className="w-4 h-4 mr-1" />
+                        指派
+                      </Button>,
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openSingleAssociateDialog(sentiment)}
+                      >
+                        <Link2 className="w-4 h-4 mr-1" />
+                        关联
+                      </Button>,
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-green-600"
+                        disabled={sentiment.status === '已办结'}
                         onClick={() => openManualClosure(sentiment)}
                       >
                         手动完结
-                      </Button>
-                    ) : null}
-                    {getSentimentTaskStatusById(sentiment.id) === '待完结' ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-green-600"
-                        onClick={() => {
-                          setCurrentSentiment(sentiment);
-                          setIsClosureOpen(true);
-                        }}
-                      >
-                        完结
-                      </Button>
-                    ) : null}
-                  </div>
+                      </Button>,
+                      getSentimentTaskStatusById(sentiment.id) === '待完结' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-green-600"
+                          onClick={() => {
+                            setCurrentSentiment(sentiment);
+                            setIsClosureOpen(true);
+                          }}
+                        >
+                          完结
+                        </Button>
+                      ) : null,
+                    ].filter(Boolean)}
+                  />
                 </TableCell>
               </TableRow>
             ))}

@@ -15,6 +15,8 @@ import {
 import { CreateCommentTask } from './CreateCommentTask';
 import { ExecuteCommentTaskDialog } from './ExecuteCommentTaskDialog';
 import { CommentTaskDetailDialog } from './CommentTaskDetailDialog';
+import { TaskCompletionReviewDialog } from '../TaskCompletionReviewDialog';
+import { TableActions } from '../TableActions';
 import type { CommentTask } from '../../types';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
 import { getAssignmentDisplayName } from '../../utils/assignmentTargets';
@@ -27,6 +29,7 @@ export function CommentTaskList() {
     createCommentTask,
     acceptCommentTask,
     submitCommentExecution,
+    submitCommentForReview,
   } = useTaskWorkflow();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -35,14 +38,22 @@ export function CommentTaskList() {
   const [customEndDate, setCustomEndDate] = useState('');
   const [isExecuteOpen, setIsExecuteOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState<CommentTask | null>(null);
 
-  const handleExecuteSubmit = (taskId: string, submission: any, isFinished: boolean, workflowConfigId?: string) => {
+  const handleExecuteSubmit = (taskId: string, submission: any) => {
     submitCommentExecution({
       taskId,
       submission,
-      submitForReview: isFinished,
+    });
+  };
+
+  const handleCompletionSubmit = (workflowConfigId: string, summary: string) => {
+    if (!currentTask) return;
+    submitCommentForReview({
+      taskId: currentTask.id,
       workflowConfigId,
+      summary,
     });
   };
 
@@ -53,6 +64,7 @@ export function CommentTaskList() {
       '已接收': 'bg-teal-100 text-teal-700',
       '未开始': 'bg-gray-100 text-gray-700',
       '进行中': 'bg-blue-100 text-blue-700',
+      '审核中': 'bg-amber-100 text-amber-700',
       '已提交': 'bg-yellow-100 text-yellow-700',
       '已审核': 'bg-green-100 text-green-700',
       '未通过': 'bg-red-100 text-red-700',
@@ -103,7 +115,7 @@ export function CommentTaskList() {
             <div className="text-sm">
               <span className="text-gray-600">待审核：</span>
               <span className="font-semibold text-yellow-600">
-                {tasks.filter(t => t.status === '已提交').length}
+                {tasks.filter(t => ['审核中', '已提交'].includes(t.status)).length}
               </span>
             </div>
           </div>
@@ -161,17 +173,17 @@ export function CommentTaskList() {
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[350px]">舆情标题</TableHead>
-              <TableHead>负责人</TableHead>
-              <TableHead>任务类型</TableHead>
-              <TableHead>要求发帖数</TableHead>
-              <TableHead>已完成</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>截止时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="w-[27%]">舆情标题</TableHead>
+              <TableHead className="w-[17%]">负责人</TableHead>
+              <TableHead className="w-[10%]">任务类型</TableHead>
+              <TableHead className="w-[9%]">要求发帖数</TableHead>
+              <TableHead className="w-[8%]">已完成</TableHead>
+              <TableHead className="w-[9%]">状态</TableHead>
+              <TableHead className="w-[10%]">截止时间</TableHead>
+              <TableHead className="w-[10%] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -189,16 +201,20 @@ export function CommentTaskList() {
                     >
                       {task.sentimentTitle}
                     </button>
-                    <div className="text-xs text-gray-500">目标：{task.goal}</div>
+                    <div className="line-clamp-2 text-xs text-gray-500" title={task.goal}>目标：{task.goal}</div>
                   </div>
                 </TableCell>
-                <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
                 <TableCell>
+                  <div className="line-clamp-2" title={getAssignmentDisplayName(task.assignmentTargets, task.assignee)}>
+                    {getAssignmentDisplayName(task.assignmentTargets, task.assignee)}
+                  </div>
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
                   <Badge variant={task.taskCategory === 'notification' ? 'secondary' : 'outline'}>
                     {task.taskCategory === 'notification' ? '通知任务' : '网评任务'}
                   </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">
                   {task.taskCategory === 'notification' ? (
                     <span className="text-gray-500">无需发帖</span>
                   ) : (
@@ -207,7 +223,7 @@ export function CommentTaskList() {
                     </>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">
                   {task.taskCategory === 'notification' ? (
                     <span className="text-gray-500">{task.status === '已知悉' ? '已确认' : '待确认'}</span>
                   ) : (
@@ -216,42 +232,50 @@ export function CommentTaskList() {
                     </>
                   )}
                 </TableCell>
-                <TableCell>{getStatusBadge(task.status)}</TableCell>
-                <TableCell className={`text-sm ${getDeadlineClassName(task.requirements.deadline, ['已完结', '已知悉'].includes(task.status))}`}>
+                <TableCell className="whitespace-nowrap">{getStatusBadge(task.status)}</TableCell>
+                <TableCell className={`whitespace-nowrap text-sm ${getDeadlineClassName(task.requirements.deadline, ['已完结', '已知悉'].includes(task.status))}`}>
                   {task.requirements.deadline}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    {task.taskCategory !== 'notification' && ['未接收', '未开始'].includes(task.status) && (
+                  <TableActions
+                    actions={[
+                      task.taskCategory !== 'notification' && ['未接收', '未开始'].includes(task.status) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-blue-600"
+                          onClick={() => acceptCommentTask(task.id)}
+                        >
+                          接收
+                        </Button>
+                      ) : null,
+                      task.taskCategory !== 'notification' && ['已接收', '进行中'].includes(task.status) ? (
+                        <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
+                          setCurrentTask(task);
+                          setIsExecuteOpen(true);
+                        }}>执行</Button>
+                      ) : null,
+                      task.taskCategory !== 'notification' && ['已接收', '进行中', '未通过'].includes(task.status) && task.submissions.length > 0 ? (
+                        <Button variant="ghost" size="sm" className="text-green-600" onClick={() => {
+                          setCurrentTask(task);
+                          setIsReviewOpen(true);
+                        }}>完结</Button>
+                      ) : null,
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-blue-600"
-                        onClick={() => acceptCommentTask(task.id)}
+                        onClick={() => {
+                          setCurrentTask(task);
+                          setIsDetailOpen(true);
+                        }}
                       >
-                        接收
-                      </Button>
-                    )}
-                    {task.taskCategory !== 'notification' && ['已接收', '进行中'].includes(task.status) && (
-                      <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => {
-                        setCurrentTask(task);
-                        setIsExecuteOpen(true);
-                      }}>执行</Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setCurrentTask(task);
-                        setIsDetailOpen(true);
-                      }}
-                    >
-                      查看详情
-                    </Button>
-                    {task.status === '已提交' && (
-                      <span className="text-xs text-amber-600">待审核</span>
-                    )}
-                  </div>
+                        查看详情
+                      </Button>,
+                      ['审核中', '已提交'].includes(task.status) ? (
+                        <span className="inline-flex h-8 items-center px-2 text-xs text-amber-600">审核中</span>
+                      ) : null,
+                    ].filter(Boolean)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -269,8 +293,19 @@ export function CommentTaskList() {
         open={isExecuteOpen}
         onOpenChange={setIsExecuteOpen}
         task={currentTask}
-        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'comment' && item.enabled)}
         onSubmit={handleExecuteSubmit}
+      />
+
+      <TaskCompletionReviewDialog
+        open={isReviewOpen}
+        onOpenChange={setIsReviewOpen}
+        title="网评任务完结送审"
+        workflowConfigs={workflowConfigs.filter((item) => item.scene === 'comment' && item.enabled)}
+        defaultSummary={
+          [...(currentTask?.submissions || [])].sort((a, b) => new Date(b.postTime).getTime() - new Date(a.postTime).getTime())[0]?.summary
+          || '已完成网评任务执行，申请完结审核。'
+        }
+        onSubmit={handleCompletionSubmit}
       />
 
       <CommentTaskDetailDialog

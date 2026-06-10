@@ -13,6 +13,7 @@ import {
 } from '../ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { CommentTaskDetailDialog } from './CommentTaskDetailDialog';
+import { TableActions } from '../TableActions';
 import type { CommentTask } from '../../types';
 import { useSentimentData } from '../../context/SentimentDataContext';
 import { useTaskWorkflow } from '../../context/TaskWorkflowContext';
@@ -99,16 +100,16 @@ export function NotificationTaskList() {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[360px]">舆情标题</TableHead>
-              <TableHead>等级</TableHead>
-              <TableHead>负责人</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead>截止时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
+              <TableHead className="w-[30%]">舆情标题</TableHead>
+              <TableHead className="w-[8%]">等级</TableHead>
+              <TableHead className="w-[18%]">负责人</TableHead>
+              <TableHead className="w-[10%]">状态</TableHead>
+              <TableHead className="w-[12%]">创建时间</TableHead>
+              <TableHead className="w-[12%]">截止时间</TableHead>
+              <TableHead className="w-[10%] text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -132,30 +133,36 @@ export function NotificationTaskList() {
                   <TableCell>
                     <Badge variant="outline">{getSentimentLevel(task)}</Badge>
                   </TableCell>
-                  <TableCell>{getAssignmentDisplayName(task.assignmentTargets, task.assignee)}</TableCell>
-                  <TableCell>{getStatusBadge(task.status)}</TableCell>
-                  <TableCell className="text-sm text-gray-600">{task.createdAt}</TableCell>
-                  <TableCell className={`text-sm ${getDeadlineClassName(task.requirements.deadline, completed)}`}>
+                  <TableCell>
+                    <div className="line-clamp-2" title={getAssignmentDisplayName(task.assignmentTargets, task.assignee)}>
+                      {getAssignmentDisplayName(task.assignmentTargets, task.assignee)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{getStatusBadge(task.status)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-600">{task.createdAt}</TableCell>
+                  <TableCell className={`whitespace-nowrap text-sm ${getDeadlineClassName(task.requirements.deadline, completed)}`}>
                     {task.requirements.deadline}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setCurrentTask(task);
-                          setIsDetailOpen(true);
-                        }}
-                      >
-                        查看详情
-                      </Button>
-                      {!completed ? (
-                        <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => openConfirm(task)}>
-                          确认知悉
-                        </Button>
-                      ) : null}
-                    </div>
+                    <TableActions
+                      actions={[
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setCurrentTask(task);
+                            setIsDetailOpen(true);
+                          }}
+                        >
+                          查看详情
+                        </Button>,
+                        !completed ? (
+                          <Button variant="ghost" size="sm" className="text-blue-600" onClick={() => openConfirm(task)}>
+                            确认知悉
+                          </Button>
+                        ) : null,
+                      ].filter(Boolean)}
+                    />
                   </TableCell>
                 </TableRow>
               );

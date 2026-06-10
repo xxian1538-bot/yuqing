@@ -28,7 +28,7 @@ interface ManualEntryFormProps {
 }
 
 export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFormProps) {
-  const { weights } = useScoringConfig();
+  const { weights, maxScores } = useScoringConfig();
   const [formData, setFormData] = useState({
     title: "",
     link: "",
@@ -74,7 +74,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
   };
 
   const calculateLevel = () => {
-    const { level, score } = calculateSentimentLevel(formData, weights);
+    const { level, score } = calculateSentimentLevel(formData, weights, maxScores);
     setCalculatedLevel(level);
     setCalculatedScore(score);
     setFormData((current) => ({
@@ -190,7 +190,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>涉及话题分类 (10%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.topic || "-"} / 加权 {getWeightedScore(dimensionScores.topic, weights.topicWeight)}
+                    原始分 {dimensionScores.topic || "-"}/{maxScores.topicMaxScore} / 加权 {getWeightedScore(dimensionScores.topic, weights.topicWeight, maxScores.topicMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.topic} onValueChange={v => setFormData({...formData, topic: v})}>
@@ -207,7 +207,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>命中关注度 (15%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.attention || "-"} / 加权 {getWeightedScore(dimensionScores.attention, weights.attentionWeight)}
+                    原始分 {dimensionScores.attention || "-"}/{maxScores.attentionMaxScore} / 加权 {getWeightedScore(dimensionScores.attention, weights.attentionWeight, maxScores.attentionMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.attention} onValueChange={v => setFormData({...formData, attention: v})}>
@@ -224,7 +224,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>态度倾向 (15%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.emotion || "-"} / 加权 {getWeightedScore(dimensionScores.emotion, weights.emotionWeight)}
+                    原始分 {dimensionScores.emotion || "-"}/{maxScores.emotionMaxScore} / 加权 {getWeightedScore(dimensionScores.emotion, weights.emotionWeight, maxScores.emotionMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.emotion} onValueChange={v => setFormData({...formData, emotion: v})}>
@@ -241,7 +241,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>传播媒体扩散度 (20%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.mediaSpread || "-"} / 加权 {getWeightedScore(dimensionScores.mediaSpread, weights.mediaWeight)}
+                    原始分 {dimensionScores.mediaSpread || "-"}/{maxScores.mediaMaxScore} / 加权 {getWeightedScore(dimensionScores.mediaSpread, weights.mediaWeight, maxScores.mediaMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.mediaSpread} onValueChange={v => setFormData({...formData, mediaSpread: v})}>
@@ -258,7 +258,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>传播形式 (10%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.format || "-"} / 加权 {getWeightedScore(dimensionScores.format, weights.formatWeight)}
+                    原始分 {dimensionScores.format || "-"}/{maxScores.formatMaxScore} / 加权 {getWeightedScore(dimensionScores.format, weights.formatWeight, maxScores.formatMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.format} onValueChange={v => setFormData({...formData, format: v})}>
@@ -275,7 +275,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>传播渠道 (10%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.channel || "-"} / 加权 {getWeightedScore(dimensionScores.channel, weights.channelWeight)}
+                    原始分 {dimensionScores.channel || "-"}/{maxScores.channelMaxScore} / 加权 {getWeightedScore(dimensionScores.channel, weights.channelWeight, maxScores.channelMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.channel} onValueChange={v => setFormData({...formData, channel: v})}>
@@ -292,7 +292,7 @@ export function ManualEntryForm({ open, onOpenChange, onSubmit }: ManualEntryFor
                 <div className="flex items-center justify-between gap-3">
                   <Label>账号影响力 (20%)</Label>
                   <span className="text-xs text-gray-500">
-                    原始分 {dimensionScores.influence || "-"} / 加权 {getWeightedScore(dimensionScores.influence, weights.influenceWeight)}
+                    原始分 {dimensionScores.influence || "-"}/{maxScores.influenceMaxScore} / 加权 {getWeightedScore(dimensionScores.influence, weights.influenceWeight, maxScores.influenceMaxScore)}
                   </span>
                 </div>
                 <Select value={formData.influence} onValueChange={v => setFormData({...formData, influence: v})}>

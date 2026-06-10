@@ -1,42 +1,44 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { defaultScoringWeights } from '../data/scoringConfig';
+import { defaultScoringConfig, normalizeScoringConfig } from '../data/scoringConfig';
 import { appApi } from '../lib/api';
-import type { ScoringWeights } from '../types';
+import type { ScoringConfig, ScoringMaxScores, ScoringWeights } from '../types';
 
 interface ScoringConfigContextValue {
   weights: ScoringWeights;
-  updateWeights: (weights: ScoringWeights) => void;
+  maxScores: ScoringMaxScores;
+  updateConfig: (config: ScoringConfig) => void;
 }
 
 const ScoringConfigContext = createContext<ScoringConfigContextValue | null>(null);
 
 export function ScoringConfigProvider({ children }: { children: ReactNode }) {
-  const [weights, setWeights] = useState<ScoringWeights>(defaultScoringWeights);
+  const [config, setConfig] = useState<ScoringConfig>(defaultScoringConfig);
 
   useEffect(() => {
     void (async () => {
       try {
-        const nextWeights = await appApi.getScoringWeights();
-        setWeights(nextWeights);
+        const nextConfig = await appApi.getScoringConfig();
+        setConfig(normalizeScoringConfig(nextConfig));
       } catch (error) {
-        console.error('Failed to load scoring weights', error);
+        console.error('Failed to load scoring config', error);
       }
     })();
   }, []);
 
-  const updateWeights = (nextWeights: ScoringWeights) => {
+  const updateConfig = (nextConfig: ScoringConfig) => {
     void (async () => {
       try {
-        await appApi.updateScoringWeights(nextWeights);
-        setWeights(nextWeights);
+        const normalizedConfig = normalizeScoringConfig(nextConfig);
+        await appApi.updateScoringConfig(normalizedConfig);
+        setConfig(normalizedConfig);
       } catch (error) {
-        console.error('Failed to update scoring weights', error);
+        console.error('Failed to update scoring config', error);
       }
     })();
   };
 
   return (
-    <ScoringConfigContext.Provider value={{ weights, updateWeights }}>
+    <ScoringConfigContext.Provider value={{ weights: config.weights, maxScores: config.maxScores, updateConfig }}>
       {children}
     </ScoringConfigContext.Provider>
   );

@@ -1,12 +1,12 @@
 import { mockCommentTasks, mockDisposalTasks, mockReportRecords, mockSentiments } from '../src/app/data/mockData';
-import { defaultScoringWeights } from '../src/app/data/scoringConfig';
+import { defaultScoringConfig, normalizeScoringConfig } from '../src/app/data/scoringConfig';
 import { initialClosureRecords, initialReviewRequests, initialWorkflowConfigs } from '../src/app/data/taskWorkflowSeeds';
 import type {
   CommentTask,
   DisposalTask,
   ReportRecord,
   ReviewRequest,
-  ScoringWeights,
+  ScoringConfig,
   SentimentClosureRecord,
   SentimentInfo,
   WorkflowConfig,
@@ -32,7 +32,7 @@ export interface AppState {
   closureRecords: SentimentClosureRecord[];
   workflowConfigs: WorkflowConfig[];
   reportRecords: ReportRecord[];
-  scoringWeights: ScoringWeights;
+  scoringConfig: ScoringConfig;
 }
 
 function clone<T>(value: T): T {
@@ -151,7 +151,7 @@ export async function seedStateIfEmpty() {
 
   const scoringCount = await countCollection('scoring_config');
   if (scoringCount === 0) {
-    await upsertRecord('scoring_config', 'default', clone(defaultScoringWeights));
+    await upsertRecord('scoring_config', 'default', clone(defaultScoringConfig));
   }
 }
 
@@ -173,7 +173,7 @@ export async function loadAppState(): Promise<AppState> {
     listCollection<SentimentClosureRecord>('closure_records'),
     listCollection<WorkflowConfig>('workflow_configs'),
     listCollection<ReportRecord>('report_records'),
-    listCollection<ScoringWeights>('scoring_config'),
+    listCollection<ScoringConfig>('scoring_config'),
   ]);
 
   return {
@@ -184,6 +184,6 @@ export async function loadAppState(): Promise<AppState> {
     closureRecords: sortByDateDesc(closureRecords, (item) => item.confirmedAt),
     workflowConfigs: ensureSceneDefaults(sortByDateDesc(workflowConfigs.map(normalizeWorkflowConfig), (item) => item.updatedAt)),
     reportRecords: sortByDateDesc(reportRecords, (item) => item.sentTime),
-    scoringWeights: scoringRecords[0] || clone(defaultScoringWeights),
+    scoringConfig: normalizeScoringConfig(scoringRecords[0] || clone(defaultScoringConfig)),
   };
 }
